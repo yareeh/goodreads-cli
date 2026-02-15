@@ -36,8 +36,8 @@ if command -v google-chrome &> /dev/null || \
     CHROME_FOUND=true
     echo "Found Chrome/Chromium"
 else
-    echo "Warning: Chrome/Chromium not found. The recorder tool requires it."
-    echo "The CLI itself will work without it."
+    echo "Note: Chrome/Chromium not found on PATH."
+    echo "Rod will automatically download Chromium on first run."
 fi
 
 echo
