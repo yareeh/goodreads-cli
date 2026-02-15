@@ -3,21 +3,37 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/jari/goodreads-cli/internal"
 	"github.com/spf13/cobra"
 )
 
 var message string
 
 var postCmd = &cobra.Command{
-	Use:   "post <group>",
+	Use:   "post <topic-id>",
 	Short: "Post to a discussion",
-	Long:  "Post a message to a Goodreads group discussion",
-	Args:  cobra.MinimumNArgs(1),
+	Long:  "Post a comment to a Goodreads discussion topic",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		group := args[0]
-		// TODO: Implement after recording the post-to-discussion endpoint
-		fmt.Printf("Posting to group '%s'\n", group)
-		fmt.Println("(Not yet implemented — use the recorder to capture request patterns)")
+		topicID := args[0]
+
+		fmt.Println("Launching browser...")
+		browser, err := internal.NewBrowser(true)
+		if err != nil {
+			return fmt.Errorf("launching browser: %w", err)
+		}
+		defer browser.Close()
+
+		if !browser.IsLoggedIn() {
+			return fmt.Errorf("not logged in — run 'goodreads login' first")
+		}
+
+		fmt.Printf("Posting to topic %s...\n", topicID)
+		if err := internal.PostComment(browser, topicID, message); err != nil {
+			return err
+		}
+
+		fmt.Println("Done!")
 		return nil
 	},
 }

@@ -59,6 +59,14 @@ Shortcut for adding a book to the `currently-reading` shelf.
 
 Shortcut for adding a book to the `read` shelf.
 
+### Post to a discussion
+
+```
+./goodreads post 1585066 --message "Hello from the CLI!"
+```
+
+Posts a comment to a Goodreads discussion topic. The argument is the topic ID from the URL (e.g. `goodreads.com/topic/show/1585066`).
+
 ## How it works
 
 - **Search** uses Goodreads' JSON autocomplete endpoint (`/book/auto_complete?format=json`) via plain HTTP
