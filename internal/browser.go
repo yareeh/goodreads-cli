@@ -24,7 +24,7 @@ func NewBrowser(headless bool) (*Browser, error) {
 		Headless(headless).
 		Launch()
 	if err != nil {
-		return nil, fmt.Errorf("failed to launch browser: %w\n\nOn Linux, install required dependencies:\n  sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2", err)
+		return nil, fmt.Errorf("failed to launch browser: %w\n\nOn Linux, install required dependencies:\n  sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libxcomposite1 libxfixes3 libxkbcommon0 libdrm2 libatspi2.0-0", err)
 	}
 
 	browser := rod.New().ControlURL(u)
