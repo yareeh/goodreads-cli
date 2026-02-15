@@ -2,8 +2,16 @@ package internal
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
+
+// shelfAriaLabels maps shelf names to the aria-label text in the shelf dialog.
+var shelfAriaLabels = map[string]string{
+	"want-to-read":      "Want to read",
+	"currently-reading":  "Currently reading",
+	"read":              "Read",
+}
 
 // AddToShelf navigates to a book page and adds it to the specified shelf.
 func AddToShelf(b *Browser, bookID string, shelfName string) error {
@@ -11,40 +19,41 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	b.Page.MustNavigate(url)
 	b.Page.MustWaitStable()
 
-	// Click the "Want to Read" button or shelf selector to open the dropdown
-	shelfButton, err := b.Page.Timeout(10 * time.Second).Element(`button[aria-label*="Shelve"], .wtrButtonContainer button, [data-testid="shelfButton"]`)
+	// The shelf button differs depending on whether the book is already shelved.
+	// Unshelved: button.Button--wtr with "Tap to shelve book as want to read"
+	// Shelved:   button.Button--secondary with "Shelved as '...'. Tap to edit shelf"
+	// Try the shelved version first, then the unshelved "Want to Read" button.
+	shelfBtn, err := b.Page.Timeout(10 * time.Second).Element(
+		`button[aria-label*="Tap to edit shelf"], button.Button--wtr`,
+	)
 	if err != nil {
+		saveDebugScreenshot(b)
 		return fmt.Errorf("could not find shelf button on book page: %w", err)
 	}
+	shelfBtn.MustClick()
+	time.Sleep(1 * time.Second)
 
-	// Check if we need to open a dropdown for non-default shelves
-	if shelfName == "want-to-read" {
-		// Just click the main button
-		shelfButton.MustClick()
+	// If we clicked "Want to Read" on an unshelved book and the target is want-to-read, we're done.
+	ariaLabel, _ := shelfBtn.Attribute("aria-label")
+	if shelfName == "want-to-read" && ariaLabel != nil && !strings.Contains(*ariaLabel, "Tap to edit shelf") {
 		b.Page.MustWaitStable()
-	} else {
-		// Click the dropdown caret/arrow to get shelf options
-		caret, err := b.Page.Timeout(5 * time.Second).Element(`button[aria-label*="Choose a shelf"], .wtrShelfButton, [data-testid="shelfDropdown"]`)
-		if err != nil {
-			// Try clicking the main button first, then look for dropdown
-			shelfButton.MustClick()
-			time.Sleep(500 * time.Millisecond)
-			caret, err = b.Page.Timeout(5 * time.Second).Element(`button[aria-label*="Choose a shelf"], .wtrShelfButton, [data-testid="shelfDropdown"]`)
-			if err != nil {
-				return fmt.Errorf("could not find shelf dropdown: %w", err)
-			}
-		}
-		caret.MustClick()
-		time.Sleep(500 * time.Millisecond)
-
-		// Select the desired shelf from the dropdown
-		shelfOption, err := b.Page.Timeout(5*time.Second).ElementR(`button, a, [role="option"], [role="menuitem"]`, shelfName)
-		if err != nil {
-			return fmt.Errorf("could not find shelf option '%s': %w", shelfName, err)
-		}
-		shelfOption.MustClick()
-		b.Page.MustWaitStable()
+		return b.SaveCookies()
 	}
+
+	// A dialog should now be open with shelf options. Find the target shelf by aria-label.
+	label, ok := shelfAriaLabels[shelfName]
+	if !ok {
+		label = shelfName
+	}
+
+	selector := fmt.Sprintf(`button[aria-label="%s"], button[aria-label="%s, selected"]`, label, label)
+	option, err := b.Page.Timeout(5 * time.Second).Element(selector)
+	if err != nil {
+		saveDebugScreenshot(b)
+		return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
+	}
+	option.MustClick()
+	b.Page.MustWaitStable()
 
 	return b.SaveCookies()
 }
@@ -58,3 +67,4 @@ func MarkCurrentlyReading(b *Browser, bookID string) error {
 func MarkRead(b *Browser, bookID string) error {
 	return AddToShelf(b, bookID, "read")
 }
+
