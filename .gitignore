@@ -1,0 +1,22 @@
+# Binaries
+goodreads
+goodreads-recorder
+*.exe
+
+# Go
+go.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Config (contains credentials)
+.goodreads-cli.yaml
+.goodreads-cli-session
+
+# OS
+.DS_Store
+
+# Claude
+/.claude

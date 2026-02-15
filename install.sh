@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MIN_GO_VERSION="1.21"
+
+echo "=== Goodreads CLI Installer ==="
+echo
+
+# Check for Go
+if ! command -v go &> /dev/null; then
+    echo "Error: Go is not installed."
+    echo "Install Go >= $MIN_GO_VERSION from https://go.dev/dl/"
+    exit 1
+fi
+
+GO_VERSION=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
+echo "Found Go $GO_VERSION"
+
+# Check Go version >= 1.21
+GO_MAJOR=$(echo "$GO_VERSION" | cut -d. -f1)
+GO_MINOR=$(echo "$GO_VERSION" | cut -d. -f2)
+REQ_MAJOR=$(echo "$MIN_GO_VERSION" | cut -d. -f1)
+REQ_MINOR=$(echo "$MIN_GO_VERSION" | cut -d. -f2)
+
+if [ "$GO_MAJOR" -lt "$REQ_MAJOR" ] || { [ "$GO_MAJOR" -eq "$REQ_MAJOR" ] && [ "$GO_MINOR" -lt "$REQ_MINOR" ]; }; then
+    echo "Error: Go >= $MIN_GO_VERSION required, found $GO_VERSION"
+    exit 1
+fi
+
+# Check for Chrome/Chromium (needed for recorder)
+CHROME_FOUND=false
+if command -v google-chrome &> /dev/null || \
+   command -v chromium &> /dev/null || \
+   command -v chromium-browser &> /dev/null || \
+   [ -d "/Applications/Google Chrome.app" ] 2>/dev/null; then
+    CHROME_FOUND=true
+    echo "Found Chrome/Chromium"
+else
+    echo "Warning: Chrome/Chromium not found. The recorder tool requires it."
+    echo "The CLI itself will work without it."
+fi
+
+echo
+echo "Installing dependencies..."
+go mod tidy
+
+echo
+echo "Building goodreads CLI..."
+go build -o goodreads .
+
+echo "Building goodreads-recorder..."
+go build -o goodreads-recorder ./cmd/recorder
+
+# Determine install directory
+INSTALL_DIR="${GOPATH:-$HOME/go}/bin"
+if [ ! -d "$INSTALL_DIR" ]; then
+    mkdir -p "$INSTALL_DIR"
+fi
+
+echo
+echo "Installing to $INSTALL_DIR..."
+mv goodreads "$INSTALL_DIR/goodreads"
+mv goodreads-recorder "$INSTALL_DIR/goodreads-recorder"
+
+echo
+echo "Installation complete!"
+echo "  goodreads          - main CLI"
+echo "  goodreads-recorder - request recorder for reverse engineering"
+echo
+echo "Make sure $INSTALL_DIR is in your PATH."
+echo
+echo "Next steps:"
+echo "  1. Create ~/.goodreads-cli.yaml with your credentials:"
+echo "     email: you@example.com"
+echo "     password: yourpassword"
+echo "  2. Run: goodreads login"
