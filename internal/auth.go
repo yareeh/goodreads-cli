@@ -2,88 +2,52 @@ package internal
 
 import (
 	"fmt"
-	"io"
-	"net/url"
-	"strings"
+	"time"
 )
 
-func Login(client *Client, cfg *Config) error {
-	// Step 1: GET the sign-in page to get CSRF token and cookies
-	req, err := client.NewRequest("GET", "/user/sign_in")
+// Login authenticates with Goodreads via Amazon's OpenID flow using rod.
+func Login(b *Browser, cfg *Config) error {
+	// Navigate to Goodreads sign-in, which redirects to Amazon
+	b.Page.MustNavigate("https://www.goodreads.com/user/sign_in")
+	b.Page.MustWaitStable()
+
+	// Click "Sign in with email" if that option is presented
+	signInLink, err := b.Page.Timeout(5 * time.Second).ElementR("a, button", "(?i)sign in with email|Sign in")
+	if err == nil {
+		signInLink.MustClick()
+		b.Page.MustWaitStable()
+	}
+
+	// Wait for the Amazon login form
+	emailField, err := b.Page.Timeout(10 * time.Second).Element(`input[name="email"], input[type="email"], #ap_email`)
 	if err != nil {
-		return fmt.Errorf("creating sign-in request: %w", err)
+		return fmt.Errorf("could not find email field — login page may have changed: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	// Fill in credentials
+	emailField.MustSelectAllText().MustInput(cfg.Email)
+
+	passwordField, err := b.Page.Timeout(5 * time.Second).Element(`input[name="password"], input[type="password"], #ap_password`)
 	if err != nil {
-		return fmt.Errorf("fetching sign-in page: %w", err)
+		return fmt.Errorf("could not find password field: %w", err)
 	}
-	defer resp.Body.Close()
+	passwordField.MustSelectAllText().MustInput(cfg.Password)
 
-	body, err := io.ReadAll(resp.Body)
+	// Submit the form
+	submitBtn, err := b.Page.Timeout(5 * time.Second).Element(`input[type="submit"], #signInSubmit, button[type="submit"]`)
 	if err != nil {
-		return fmt.Errorf("reading sign-in page: %w", err)
+		return fmt.Errorf("could not find submit button: %w", err)
+	}
+	submitBtn.MustClick()
+
+	// Wait for redirect back to Goodreads
+	b.Page.MustWaitStable()
+	time.Sleep(2 * time.Second)
+
+	// Verify login succeeded
+	if !b.IsLoggedIn() {
+		return fmt.Errorf("login failed — check your credentials in %s or look for CAPTCHA/2FA requirements", ConfigPath())
 	}
 
-	// Extract CSRF token (authenticity_token) from the page
-	token := extractCSRFToken(string(body))
-	if token == "" {
-		return fmt.Errorf("could not find CSRF token on sign-in page — Goodreads may have changed their login flow.\nUse the recorder tool to investigate: go run ./cmd/recorder")
-	}
-
-	// Step 2: POST login credentials
-	form := url.Values{}
-	form.Set("user[email]", cfg.Email)
-	form.Set("user[password]", cfg.Password)
-	form.Set("authenticity_token", token)
-
-	loginReq, err := client.NewRequest("POST", "/user/sign_in")
-	if err != nil {
-		return fmt.Errorf("creating login request: %w", err)
-	}
-
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	loginReq.Body = io.NopCloser(strings.NewReader(form.Encode()))
-	loginReq.ContentLength = int64(len(form.Encode()))
-
-	loginResp, err := client.Do(loginReq)
-	if err != nil {
-		return fmt.Errorf("submitting login: %w", err)
-	}
-	defer loginResp.Body.Close()
-
-	// Check if login succeeded by looking at redirect or session
-	if loginResp.StatusCode >= 400 {
-		return fmt.Errorf("login failed with status %d — check your credentials in %s", loginResp.StatusCode, ConfigPath())
-	}
-
-	if !client.HasSession() {
-		return fmt.Errorf("login appeared to succeed but no session cookies were set")
-	}
-
-	return client.SaveSession()
-}
-
-func extractCSRFToken(html string) string {
-	// Look for <input name="authenticity_token" ... value="...">
-	needle := `name="authenticity_token"`
-	idx := strings.Index(html, needle)
-	if idx == -1 {
-		return ""
-	}
-
-	// Search for value= near the token input
-	sub := html[max(0, idx-200) : min(len(html), idx+200)]
-	valIdx := strings.Index(sub, `value="`)
-	if valIdx == -1 {
-		return ""
-	}
-
-	start := valIdx + len(`value="`)
-	end := strings.Index(sub[start:], `"`)
-	if end == -1 {
-		return ""
-	}
-
-	return sub[start : start+end]
+	return b.SaveCookies()
 }

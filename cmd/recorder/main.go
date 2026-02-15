@@ -63,9 +63,7 @@ func main() {
 
 		headers := make(map[string]string)
 		for k, v := range e.Request.Headers {
-			if val, ok := v.(string); ok {
-				headers[k] = val
-			}
+			headers[k] = v.Str()
 		}
 
 		entry := RequestLog{
