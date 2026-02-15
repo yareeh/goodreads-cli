@@ -20,13 +20,23 @@ type Browser struct {
 // NewBrowser launches a Chrome instance and navigates to goodreads.com.
 // Set headless to false to see the browser for debugging.
 func NewBrowser(headless bool) (*Browser, error) {
-	u := launcher.New().
+	u, err := launcher.New().
 		Headless(headless).
-		MustLaunch()
+		Launch()
+	if err != nil {
+		return nil, fmt.Errorf("failed to launch browser: %w\n\nOn Linux, install required dependencies:\n  sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2", err)
+	}
 
-	browser := rod.New().ControlURL(u).MustConnect()
+	browser := rod.New().ControlURL(u)
+	if err := browser.Connect(); err != nil {
+		return nil, fmt.Errorf("failed to connect to browser: %w", err)
+	}
 
-	page := browser.MustPage("https://www.goodreads.com")
+	page, err := browser.Page(proto.TargetCreateTarget{URL: "https://www.goodreads.com"})
+	if err != nil {
+		browser.MustClose()
+		return nil, fmt.Errorf("failed to open page: %w", err)
+	}
 	page.MustWaitStable()
 
 	b := &Browser{Rod: browser, Page: page}
