@@ -59,13 +59,43 @@ Shortcut for adding a book to the `currently-reading` shelf.
 
 Shortcut for adding a book to the `read` shelf.
 
-### Post to a discussion
+### Reply to a discussion topic
 
 ```
-./goodreads post 1585066 --message "Hello from the CLI!"
+./goodreads post-reply 1585066 --message "Hello from the CLI!"
+./goodreads post-reply 1585066 --message "Check out this book" --book 55145261
+./goodreads post-reply 1585066 --message "Great author" --author 513351
 ```
 
-Posts a comment to a Goodreads discussion topic. The argument is the topic ID from the URL (e.g. `goodreads.com/topic/show/1585066`).
+Posts a reply to an existing discussion topic. The argument is the topic ID from the URL (e.g. `goodreads.com/topic/show/1585066`). Use `--book` or `--author` to add a reference link.
+
+### Create a new discussion topic
+
+```
+./goodreads post-topic \
+  --url "https://www.goodreads.com/topic/new?context_id=220-group&context_type=Group&topic[folder_id]=120471" \
+  --subject "My topic title" \
+  --message "The body of the topic"
+./goodreads post-topic \
+  --url "https://www.goodreads.com/topic/new?context_id=220-group&context_type=Group&topic[folder_id]=120471" \
+  --subject "Book recommendation" \
+  --message "You should read this" \
+  --book 55145261
+```
+
+Creates a new topic in a group. The `--url` is the full new-topic URL from Goodreads (copy it from the "New topic" link in the group). Use `--book` or `--author` to add a reference link.
+
+## Debugging
+
+Add `--no-headless` to any command to open a visible browser window:
+
+```
+./goodreads login --no-headless
+./goodreads shelf 55145261 --shelf want-to-read --no-headless
+./goodreads post-reply 1585066 --message "test" --no-headless
+```
+
+This is useful for diagnosing issues (CAPTCHAs, 2FA prompts, changed page layouts). When any browser command fails, a debug screenshot is saved to `~/goodreads-cli-debug.png`.
 
 ## How it works
 

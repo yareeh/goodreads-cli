@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var noHeadless bool
+
 var rootCmd = &cobra.Command{
 	Use:   "goodreads",
 	Short: "A CLI for interacting with Goodreads",
@@ -18,4 +20,8 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().BoolVar(&noHeadless, "no-headless", false, "show the browser window for debugging")
 }

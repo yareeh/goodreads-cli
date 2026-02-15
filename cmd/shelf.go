@@ -18,7 +18,7 @@ var shelfCmd = &cobra.Command{
 		bookID := args[0]
 
 		fmt.Println("Launching browser...")
-		browser, err := internal.NewBrowser(true)
+		browser, err := internal.NewBrowser(!noHeadless)
 		if err != nil {
 			return fmt.Errorf("launching browser: %w", err)
 		}
