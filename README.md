@@ -97,6 +97,19 @@ Add `--no-headless` to any command to open a visible browser window:
 
 This is useful for diagnosing issues (CAPTCHAs, 2FA prompts, changed page layouts). When any browser command fails, a debug screenshot is saved to `~/goodreads-cli-debug.png`.
 
+## AI Agent Integration
+
+This CLI is designed to be easily scriptable and can be used as a tool/skill by AI agents and automation frameworks. See [SKILL.md](SKILL.md) for the full agent reference including command documentation and common workflows like searching for a book by name and adding it to a shelf.
+
+The CLI uses plain text output and standard exit codes, making it straightforward to integrate with any agent framework, shell script, or automation tool.
+
+**Claude Code:** Add to `.claude/settings.json`:
+```json
+{ "skills": ["/path/to/goodreads-cli/SKILL.md"] }
+```
+
+**Other agents:** Point your agent's tool/skill config at `SKILL.md`, or include its contents in your system prompt.
+
 ## How it works
 
 - **Search** uses Goodreads' JSON autocomplete endpoint (`/book/auto_complete?format=json`) via plain HTTP
