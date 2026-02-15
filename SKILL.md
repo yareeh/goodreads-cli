@@ -138,6 +138,50 @@ Author IDs are not returned by search — visit the book page or use the recorde
    ```
    This inserts a book reference link into the comment automatically.
 
+## Requesting a Book to Be Added to Goodreads
+
+**IMPORTANT: Human in the loop required.** Before requesting a book addition, the agent MUST:
+1. Ask the user to first try searching for the book on Goodreads using the app or browser (the search autocomplete API may not find all books)
+2. Only after the user confirms the book truly does not exist in the database, proceed with the request
+
+### English / international books
+
+Post a new topic in the "Adding New Books & Editions" folder of the Goodreads Librarians Group. Use `post-topic` with the new-topic URL for that folder.
+
+The subject line should be the book title. The message must include:
+- Title and author name(s)
+- ISBN or ASIN
+- Publisher and publication date (year, month, day)
+- Page count and format (paperback, hardcover, ebook, etc.)
+- Language (for non-English books)
+- Link to book data from a non-bookseller site (publisher or author site; Amazon links are acceptable but not Barnes & Noble)
+
+Rules:
+- One book per thread (unless requesting multiple editions of the same book)
+- Do not post duplicate requests
+- Wait at least two weeks before bumping a thread
+- Audible audio and Kindle editions are imported automatically from Amazon — no need to request them
+
+Reference: https://www.goodreads.com/topic/show/869773-how-to-request-a-book-to-be-added-to-goodreads
+
+### Finnish books
+
+Finnish book requests use a simpler format — post a reply to the relevant existing topic (do not create new topics).
+
+**To request a new book to be added to the database:**
+```bash
+./goodreads post-reply 22841389 --message "Kirjan tiedot: ..."
+```
+Topic: [Kirjan lisäys tietokantaan](https://www.goodreads.com/topic/show/22841389) (topic ID: 22841389)
+
+**To request a Finnish edition of an existing book:**
+```bash
+./goodreads post-reply 23181050 --message "Painoksen tiedot: ..." --book <book-id>
+```
+Topic: [Suomenkielisen painoksen lisääminen](https://www.goodreads.com/topic/show/23181050) (topic ID: 23181050)
+
+All Finnish request topics are in: https://www.goodreads.com/topic/group_folder/495115
+
 ## Notes
 
 - All shelf and discussion commands launch a headless Chrome instance — they take a few seconds
