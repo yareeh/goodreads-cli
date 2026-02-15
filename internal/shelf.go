@@ -19,28 +19,43 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	b.Page.MustNavigate(url)
 	b.Page.MustWaitStable()
 
-	// The shelf button differs depending on whether the book is already shelved.
-	// Unshelved: button.Button--wtr with "Tap to shelve book as want to read"
-	// Shelved:   button.Button--secondary with "Shelved as '...'. Tap to edit shelf"
-	// Try the shelved version first, then the unshelved "Want to Read" button.
-	shelfBtn, err := b.Page.Timeout(10 * time.Second).Element(
+	// Check if the book is already shelved
+	editBtn, err := b.Page.Timeout(10 * time.Second).Element(
 		`button[aria-label*="Tap to edit shelf"], button.Button--wtr`,
 	)
 	if err != nil {
 		saveDebugScreenshot(b)
 		return fmt.Errorf("could not find shelf button on book page: %w", err)
 	}
-	shelfBtn.MustClick()
-	time.Sleep(1 * time.Second)
 
-	// If we clicked "Want to Read" on an unshelved book and the target is want-to-read, we're done.
-	ariaLabel, _ := shelfBtn.Attribute("aria-label")
-	if shelfName == "want-to-read" && ariaLabel != nil && !strings.Contains(*ariaLabel, "Tap to edit shelf") {
+	ariaLabel, _ := editBtn.Attribute("aria-label")
+	alreadyShelved := ariaLabel != nil && strings.Contains(*ariaLabel, "Tap to edit shelf")
+
+	if !alreadyShelved {
+		// Book is unshelved — click "Want to Read" first to shelve it
+		editBtn.MustClick()
 		b.Page.MustWaitStable()
-		return b.SaveCookies()
+		time.Sleep(1 * time.Second)
+
+		if shelfName == "want-to-read" {
+			return b.SaveCookies()
+		}
+
+		// Now the button should change to the edit-shelf variant, re-find it
+		editBtn, err = b.Page.Timeout(10 * time.Second).Element(
+			`button[aria-label*="Tap to edit shelf"]`,
+		)
+		if err != nil {
+			saveDebugScreenshot(b)
+			return fmt.Errorf("book was shelved but edit button did not appear: %w", err)
+		}
 	}
 
-	// A dialog should now be open with shelf options. Find the target shelf by aria-label.
+	// Click the edit button to open the shelf dialog
+	editBtn.MustClick()
+	time.Sleep(1 * time.Second)
+
+	// Select the target shelf from the dialog.
 	label, ok := shelfAriaLabels[shelfName]
 	if !ok {
 		label = shelfName
