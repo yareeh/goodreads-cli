@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var loginNoHeadless bool
+
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with Goodreads",
@@ -18,7 +20,7 @@ var loginCmd = &cobra.Command{
 		}
 
 		fmt.Println("Launching browser...")
-		browser, err := internal.NewBrowser()
+		browser, err := internal.NewBrowser(!loginNoHeadless)
 		if err != nil {
 			return fmt.Errorf("launching browser: %w", err)
 		}
@@ -40,5 +42,6 @@ var loginCmd = &cobra.Command{
 }
 
 func init() {
+	loginCmd.Flags().BoolVar(&loginNoHeadless, "no-headless", false, "show the browser window for debugging")
 	rootCmd.AddCommand(loginCmd)
 }

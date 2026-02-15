@@ -17,10 +17,11 @@ type Browser struct {
 	Page *rod.Page
 }
 
-// NewBrowser launches a headless Chrome instance and navigates to goodreads.com.
-func NewBrowser() (*Browser, error) {
+// NewBrowser launches a Chrome instance and navigates to goodreads.com.
+// Set headless to false to see the browser for debugging.
+func NewBrowser(headless bool) (*Browser, error) {
 	u := launcher.New().
-		Headless(true).
+		Headless(headless).
 		MustLaunch()
 
 	browser := rod.New().ControlURL(u).MustConnect()

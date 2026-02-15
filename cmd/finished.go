@@ -16,7 +16,7 @@ var finishedCmd = &cobra.Command{
 		bookID := args[0]
 
 		fmt.Println("Launching browser...")
-		browser, err := internal.NewBrowser()
+		browser, err := internal.NewBrowser(true)
 		if err != nil {
 			return fmt.Errorf("launching browser: %w", err)
 		}
