@@ -27,13 +27,32 @@ if [ "$GO_MAJOR" -lt "$REQ_MAJOR" ] || { [ "$GO_MAJOR" -eq "$REQ_MAJOR" ] && [ "
     exit 1
 fi
 
-# Check for Chrome/Chromium (needed for recorder)
-CHROME_FOUND=false
+# On Linux, check/suggest Chromium system dependencies
+if [ "$(uname -s)" = "Linux" ]; then
+    echo "Detected Linux — checking Chromium dependencies..."
+    MISSING_LIBS=false
+    for lib in libnss3.so libatk-1.0.so.0 libatk-bridge-2.0.so.0 libcups.so.2 libXdamage.so.1 libXrandr.so.2 libgbm.so.1 libpango-1.0.so.0 libcairo.so.2 libasound.so.2 libXcomposite.so.1 libXfixes.so.3 libxkbcommon.so.0 libdrm.so.2 libatspi.so.0; do
+        if ! ldconfig -p 2>/dev/null | grep -q "$lib"; then
+            MISSING_LIBS=true
+            break
+        fi
+    done
+    if [ "$MISSING_LIBS" = true ]; then
+        echo "Some Chromium dependencies are missing. Install them with:"
+        echo "  sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \\"
+        echo "    libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libxcomposite1 \\"
+        echo "    libxfixes3 libxkbcommon0 libdrm2 libatspi2.0-0"
+        echo
+    else
+        echo "Chromium dependencies OK"
+    fi
+fi
+
+# Check for Chrome/Chromium
 if command -v google-chrome &> /dev/null || \
    command -v chromium &> /dev/null || \
    command -v chromium-browser &> /dev/null || \
    [ -d "/Applications/Google Chrome.app" ] 2>/dev/null; then
-    CHROME_FOUND=true
     echo "Found Chrome/Chromium"
 else
     echo "Note: Chrome/Chromium not found on PATH."

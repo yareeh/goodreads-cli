@@ -6,12 +6,20 @@ A command-line interface for Goodreads. Uses browser automation (rod) for login 
 
 1. Install [Go](https://go.dev/dl/)
 
-2. Build:
+2. **Linux only** — install Chromium dependencies:
+   ```bash
+   sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \
+     libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libxcomposite1 \
+     libxfixes3 libxkbcommon0 libdrm2 libatspi2.0-0
+   ```
+   On macOS these are included with Chrome or downloaded automatically by rod.
+
+3. Build:
    ```
    go build -o goodreads .
    ```
 
-3. Create `~/.goodreads-cli.yaml` with your Goodreads (Amazon) credentials:
+4. Create `~/.goodreads-cli.yaml` with your Goodreads (Amazon) credentials:
    ```yaml
    email: you@example.com
    password: yourpassword
