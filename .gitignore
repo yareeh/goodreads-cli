@@ -1,7 +1,9 @@
 # Binaries
 goodreads
+goodreads-cli
 goodreads-recorder
 *.exe
+dist/
 
 # IDE
 .idea/

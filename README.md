@@ -10,11 +10,27 @@
 
 A command-line interface for Goodreads. Uses browser automation (rod) for login and shelf operations, and plain HTTP for search.
 
+## Installation
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install yareeh/tap/goodreads-cli
+```
+
+### Go install
+
+```bash
+go install github.com/jari/goodreads-cli@latest
+```
+
+### Binary download
+
+Download pre-built binaries from the [Releases](https://github.com/yareeh/goodreads-cli/releases) page.
+
 ## Setup
 
-1. Install [Go](https://go.dev/dl/)
-
-2. **Linux only** — install Chromium dependencies:
+1. **Linux only** — install Chromium dependencies:
    ```bash
    sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \
      libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libxcomposite1 \
@@ -22,12 +38,7 @@ A command-line interface for Goodreads. Uses browser automation (rod) for login 
    ```
    On macOS these are included with Chrome or downloaded automatically by rod.
 
-3. Build:
-   ```
-   go build -o goodreads .
-   ```
-
-4. Create `~/.goodreads-cli.yaml` with your Goodreads (Amazon) credentials:
+2. Create `~/.goodreads-cli.yaml` with your Goodreads (Amazon) credentials:
    ```yaml
    email: you@example.com
    password: yourpassword
