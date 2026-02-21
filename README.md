@@ -1,5 +1,13 @@
 # goodreads-cli
 
+[![CI](https://github.com/yareeh/goodreads-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/yareeh/goodreads-cli/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/yareeh/goodreads-cli/graph/badge.svg)](https://codecov.io/gh/yareeh/goodreads-cli)
+[![Go](https://img.shields.io/github/go-mod/go-version/yareeh/goodreads-cli)](https://go.dev)
+[![Release](https://img.shields.io/github/v/release/yareeh/goodreads-cli)](https://github.com/yareeh/goodreads-cli/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/yareeh/goodreads-cli)](https://goreportcard.com/report/github.com/yareeh/goodreads-cli)
+[![Built for AI Agents](https://img.shields.io/badge/built%20for-AI%20agents-blueviolet)](https://github.com/yareeh/goodreads-cli)
+
 A command-line interface for Goodreads. Uses browser automation (rod) for login and shelf operations, and plain HTTP for search.
 
 ## Setup

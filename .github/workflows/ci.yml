@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 8 * * 1'  # Weekly on Monday at 08:00 UTC
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        if: github.event_name != 'schedule'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
