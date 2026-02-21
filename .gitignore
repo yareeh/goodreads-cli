@@ -3,9 +3,6 @@ goodreads
 goodreads-recorder
 *.exe
 
-# Go
-go.sum
-
 # IDE
 .idea/
 .vscode/
