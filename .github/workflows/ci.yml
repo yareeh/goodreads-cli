@@ -21,8 +21,8 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Test
-        run: go test -v -coverprofile=coverage.out ./...
+      - name: Unit tests
+        run: go test -v -short -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         if: github.event_name != 'schedule'
@@ -30,3 +30,23 @@ jobs:
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  integration:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Integration tests (search)
+        run: go test -v -timeout 60s -run '^TestIntegration' ./...
+
+      - name: Integration tests (browser)
+        if: env.GOODREADS_SESSION_COOKIES != ''
+        env:
+          GOODREADS_SESSION_COOKIES: ${{ secrets.GOODREADS_SESSION_COOKIES }}
+        run: go test -v -timeout 120s -run '^TestIntegrationShelf|^TestIntegrationMark' ./...
