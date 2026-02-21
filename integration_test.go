@@ -18,6 +18,8 @@ const (
 	testShelfBookID = "55145261" // Project Hail Mary
 )
 
+// --- Search tests (no auth needed) ---
+
 func TestIntegrationSearch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
@@ -130,32 +132,81 @@ func TestIntegrationSearchResultFields(t *testing.T) {
 	}
 }
 
-// Browser-based tests require GOODREADS_SESSION_COOKIES env var
-// containing base64-encoded rod session cookies, plus headless Chrome.
-// These are skipped if the env var is not set.
+// --- Config tests ---
 
-func setupBrowser(t *testing.T) *internal.Browser {
-	t.Helper()
-	cookies := os.Getenv("GOODREADS_SESSION_COOKIES")
-	if cookies == "" {
-		t.Skip("GOODREADS_SESSION_COOKIES not set, skipping browser test")
+func TestIntegrationLoadConfigFromEnv(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
 	}
 
-	// Write cookies to temp session file
-	tmpDir := t.TempDir()
+	// Set env vars
+	origEmail := os.Getenv("GOODREADS_EMAIL")
+	origPass := os.Getenv("GOODREADS_PASSWORD")
+	os.Setenv("GOODREADS_EMAIL", "test@example.com")
+	os.Setenv("GOODREADS_PASSWORD", "secret123")
+	defer func() {
+		if origEmail != "" {
+			os.Setenv("GOODREADS_EMAIL", origEmail)
+		} else {
+			os.Unsetenv("GOODREADS_EMAIL")
+		}
+		if origPass != "" {
+			os.Setenv("GOODREADS_PASSWORD", origPass)
+		} else {
+			os.Unsetenv("GOODREADS_PASSWORD")
+		}
+	}()
 
-	data, err := base64.StdEncoding.DecodeString(cookies)
+	cfg, err := internal.LoadConfig()
 	if err != nil {
-		t.Fatalf("decoding session cookies: %v", err)
+		t.Fatalf("LoadConfig: %v", err)
 	}
-	if err := os.WriteFile(tmpDir+"/.goodreads-cli-session", data, 0600); err != nil {
-		t.Fatalf("writing session file: %v", err)
+	if cfg.Email != "test@example.com" {
+		t.Errorf("Email = %q, want %q", cfg.Email, "test@example.com")
+	}
+	if cfg.Password != "secret123" {
+		t.Errorf("Password = %q, want %q", cfg.Password, "secret123")
+	}
+}
+
+func TestIntegrationLogout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
 	}
 
-	// Override HOME so Browser loads our temp cookies
+	// Create a temp session file
+	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	defer os.Setenv("HOME", origHome)
+
+	sessionPath := internal.SessionPath()
+	os.WriteFile(sessionPath, []byte("fake-cookies"), 0600)
+
+	if err := internal.Logout(); err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+
+	if _, err := os.Stat(sessionPath); !os.IsNotExist(err) {
+		t.Error("session file still exists after logout")
+	}
+}
+
+// --- Browser-based tests ---
+// Require GOODREADS_EMAIL + GOODREADS_PASSWORD env vars, or
+// GOODREADS_SESSION_COOKIES (base64-encoded rod cookies).
+// Also need headless Chrome available.
+
+func setupBrowserWithLogin(t *testing.T) *internal.Browser {
+	t.Helper()
+
+	email := os.Getenv("GOODREADS_EMAIL")
+	password := os.Getenv("GOODREADS_PASSWORD")
+	cookies := os.Getenv("GOODREADS_SESSION_COOKIES")
+
+	if email == "" && cookies == "" {
+		t.Skip("GOODREADS_EMAIL or GOODREADS_SESSION_COOKIES not set, skipping browser test")
+	}
 
 	browser, err := internal.NewBrowser(true) // headless
 	if err != nil {
@@ -163,15 +214,73 @@ func setupBrowser(t *testing.T) *internal.Browser {
 	}
 	t.Cleanup(func() { browser.Close() })
 
-	if err := browser.LoadCookies(); err != nil {
-		t.Fatalf("LoadCookies: %v", err)
+	// Try loading existing cookies first
+	if cookies != "" {
+		tmpDir := t.TempDir()
+		data, err := base64.StdEncoding.DecodeString(cookies)
+		if err != nil {
+			t.Fatalf("decoding session cookies: %v", err)
+		}
+		origHome := os.Getenv("HOME")
+		os.Setenv("HOME", tmpDir)
+		t.Cleanup(func() { os.Setenv("HOME", origHome) })
+		os.WriteFile(internal.SessionPath(), data, 0600)
+		if err := browser.LoadCookies(); err != nil {
+			t.Fatalf("LoadCookies: %v", err)
+		}
+		if browser.IsLoggedIn() {
+			return browser
+		}
+		t.Log("Stored cookies expired, falling back to login")
+		os.Setenv("HOME", origHome)
+	}
+
+	// Login with credentials
+	if email == "" || password == "" {
+		t.Skip("cookies expired and GOODREADS_EMAIL/GOODREADS_PASSWORD not set")
+	}
+
+	cfg := &internal.Config{Email: email, Password: password}
+	if err := internal.Login(browser, cfg); err != nil {
+		t.Fatalf("Login: %v", err)
 	}
 
 	return browser
 }
 
+func TestIntegrationLogin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	email := os.Getenv("GOODREADS_EMAIL")
+	password := os.Getenv("GOODREADS_PASSWORD")
+	if email == "" || password == "" {
+		t.Skip("GOODREADS_EMAIL and GOODREADS_PASSWORD not set, skipping login test")
+	}
+
+	browser, err := internal.NewBrowser(true)
+	if err != nil {
+		t.Fatalf("NewBrowser: %v", err)
+	}
+	defer browser.Close()
+
+	cfg := &internal.Config{Email: email, Password: password}
+	if err := internal.Login(browser, cfg); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	if !browser.IsLoggedIn() {
+		t.Error("expected to be logged in after Login()")
+	}
+	t.Log("Login successful")
+}
+
 func TestIntegrationShelfAddAndRemove(t *testing.T) {
-	browser := setupBrowser(t)
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
 
 	// Add book to want-to-read shelf
 	err := internal.AddToShelf(browser, testShelfBookID, "want-to-read")
@@ -188,13 +297,13 @@ func TestIntegrationShelfAddAndRemove(t *testing.T) {
 		t.Fatalf("AddToShelf(read): %v", err)
 	}
 	t.Log("Moved book to read shelf")
-
-	// Note: Goodreads doesn't have a simple "remove from all shelves" API via browser.
-	// The book stays on the "read" shelf. This is acceptable for testing.
 }
 
 func TestIntegrationMarkCurrentlyReading(t *testing.T) {
-	browser := setupBrowser(t)
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
 
 	err := internal.MarkCurrentlyReading(browser, testShelfBookID)
 	if err != nil {

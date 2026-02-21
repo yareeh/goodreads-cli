@@ -42,11 +42,19 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Integration tests (search)
-        run: go test -v -timeout 60s -run '^TestIntegration' ./...
+      - name: Install Chromium dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
+            libxcomposite1 libxfixes3 libxkbcommon0 libdrm2 libatspi2.0-0
 
-      - name: Integration tests (browser)
-        if: env.GOODREADS_SESSION_COOKIES != ''
+      - name: Integration tests (search, no auth)
+        run: go test -v -timeout 60s -run '^TestIntegrationSearch|^TestIntegrationLoadConfig|^TestIntegrationLogout' ./...
+
+      - name: Integration tests (browser + login)
+        if: env.GOODREADS_EMAIL != ''
         env:
-          GOODREADS_SESSION_COOKIES: ${{ secrets.GOODREADS_SESSION_COOKIES }}
-        run: go test -v -timeout 120s -run '^TestIntegrationShelf|^TestIntegrationMark' ./...
+          GOODREADS_EMAIL: ${{ secrets.GOODREADS_EMAIL }}
+          GOODREADS_PASSWORD: ${{ secrets.GOODREADS_PASSWORD }}
+        run: go test -v -timeout 180s -run '^TestIntegrationLogin$|^TestIntegrationShelf|^TestIntegrationMark' ./...
