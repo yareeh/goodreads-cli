@@ -20,9 +20,12 @@ type Browser struct {
 // NewBrowser launches a Chrome instance and navigates to goodreads.com.
 // Set headless to false to see the browser for debugging.
 func NewBrowser(headless bool) (*Browser, error) {
-	u, err := launcher.New().
-		Headless(headless).
-		Launch()
+	l := launcher.New().
+		Headless(headless)
+	if os.Getenv("CI") != "" {
+		l = l.NoSandbox(true)
+	}
+	u, err := l.Launch()
 	if err != nil {
 		return nil, fmt.Errorf("failed to launch browser: %w\n\nOn Linux, install required dependencies:\n  sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libxcomposite1 libxfixes3 libxkbcommon0 libdrm2 libatspi2.0-0", err)
 	}
