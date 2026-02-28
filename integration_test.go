@@ -214,7 +214,7 @@ func setupBrowserWithLogin(t *testing.T) *internal.Browser {
 	}
 	t.Cleanup(func() { browser.Close() })
 
-	// Try loading existing cookies first
+	// Try loading existing cookies from env var
 	if cookies != "" {
 		tmpDir := t.TempDir()
 		data, err := base64.StdEncoding.DecodeString(cookies)
@@ -235,7 +235,17 @@ func setupBrowserWithLogin(t *testing.T) *internal.Browser {
 		os.Setenv("HOME", origHome)
 	}
 
-	// Login with credentials
+	// Try loading cookies saved to disk by a prior test (e.g. TestIntegrationLogin)
+	if err := browser.LoadCookies(); err == nil {
+		browser.Page.MustNavigate("https://www.goodreads.com")
+		browser.Page.MustWaitStable()
+		if browser.IsLoggedIn() {
+			t.Log("Reusing session cookies from disk")
+			return browser
+		}
+	}
+
+	// Login with credentials as last resort
 	if email == "" || password == "" {
 		t.Skip("cookies expired and GOODREADS_EMAIL/GOODREADS_PASSWORD not set")
 	}
