@@ -2,6 +2,8 @@ module github.com/yareeh/goodreads-cli
 
 go 1.21
 
+retract v1.0.0 // Module path was incorrect (github.com/jari/ instead of github.com/yareeh/)
+
 require (
 	github.com/go-rod/rod v0.116.2
 	github.com/spf13/cobra v1.8.1
