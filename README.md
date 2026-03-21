@@ -21,7 +21,7 @@ brew install yareeh/tap/goodreads-cli
 ### Go install
 
 ```bash
-go install github.com/jari/goodreads-cli@latest
+go install github.com/yareeh/goodreads-cli@latest
 ```
 
 ### Binary download

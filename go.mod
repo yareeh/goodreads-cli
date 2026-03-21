@@ -1,4 +1,4 @@
-module github.com/jari/goodreads-cli
+module github.com/yareeh/goodreads-cli
 
 go 1.21
 

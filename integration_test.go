@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jari/goodreads-cli/internal"
+	"github.com/yareeh/goodreads-cli/internal"
 )
 
 // Test data: well-known Goodreads books

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jari/goodreads-cli/internal"
+	"github.com/yareeh/goodreads-cli/internal"
 	"github.com/spf13/cobra"
 )
 

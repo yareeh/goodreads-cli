@@ -1,6 +1,6 @@
 package main
 
-import "github.com/jari/goodreads-cli/cmd"
+import "github.com/yareeh/goodreads-cli/cmd"
 
 func main() {
 	cmd.Execute()
