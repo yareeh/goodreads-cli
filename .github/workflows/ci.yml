@@ -21,6 +21,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Pre-commit checks
+        run: pip install pre-commit && pre-commit run --all-files
+
       - name: Verify modules
         run: go mod verify
 
