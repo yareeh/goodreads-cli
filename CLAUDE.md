@@ -8,6 +8,16 @@ Go CLI for Goodreads using browser automation (rod) and HTTP scraping.
 go build -o goodreads .
 ```
 
+
+## Development workflow (TDD)
+
+For every new feature or bug fix:
+1. **Write tests first**
+2. **Implement** the feature
+3. **Lint and format**
+4. **Run tests**
+5. Fix any issues and repeat until clean
+
 ## Releasing
 
 Tag and release using `gh`:
