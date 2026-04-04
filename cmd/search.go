@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/yareeh/goodreads-cli/internal"
 	"github.com/spf13/cobra"
 )
+
+var searchJSONFlag bool
 
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
@@ -30,6 +33,15 @@ var searchCmd = &cobra.Command{
 			return nil
 		}
 
+		if searchJSONFlag {
+			data, err := json.MarshalIndent(books, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(data))
+			return nil
+		}
+
 		fmt.Printf("%-12s %-50s %s\n", "ID", "TITLE", "AUTHOR")
 		fmt.Printf("%-12s %-50s %s\n", "---", "-----", "------")
 		for _, b := range books {
@@ -46,4 +58,5 @@ var searchCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(searchCmd)
+	searchCmd.Flags().BoolVar(&searchJSONFlag, "json", false, "Output results as JSON")
 }
