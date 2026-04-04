@@ -66,6 +66,6 @@ func saveDebugScreenshot(b *Browser) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, data, 0644)
+	_ = os.WriteFile(path, data, 0600)
 	fmt.Fprintf(os.Stderr, "Debug screenshot saved to %s\n", path)
 }

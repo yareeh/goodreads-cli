@@ -21,11 +21,19 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify modules
+        run: go mod verify
+
       - name: Build
         run: go build -mod=readonly -v ./...
 
       - name: Unit tests
         run: go test -mod=readonly -v -short -coverprofile=coverage.out ./...
+
+      - name: Security lint
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
 
       - name: Vulnerability scan
         run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...

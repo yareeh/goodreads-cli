@@ -60,15 +60,16 @@ else
 fi
 
 echo
-echo "Installing dependencies..."
-go mod tidy
+echo "Downloading dependencies..."
+go mod download
+go mod verify
 
 echo
 echo "Building goodreads CLI..."
-go build -o goodreads .
+go build -mod=readonly -o goodreads .
 
 echo "Building goodreads-recorder..."
-go build -o goodreads-recorder ./cmd/recorder
+go build -mod=readonly -o goodreads-recorder ./cmd/recorder
 
 # Determine install directory
 INSTALL_DIR="${GOPATH:-$HOME/go}/bin"
