@@ -13,6 +13,19 @@ import (
 
 const BaseURL = "https://www.goodreads.com"
 
+func rodSameSite(ss proto.NetworkCookieSameSite) http.SameSite {
+	switch ss {
+	case proto.NetworkCookieSameSiteLax:
+		return http.SameSiteLaxMode
+	case proto.NetworkCookieSameSiteStrict:
+		return http.SameSiteStrictMode
+	case proto.NetworkCookieSameSiteNone:
+		return http.SameSiteNoneMode
+	default:
+		return http.SameSiteLaxMode
+	}
+}
+
 // Client is a plain HTTP client for operations that don't need a browser (e.g. search).
 type Client struct {
 	HTTP *http.Client
@@ -48,13 +61,14 @@ func (c *Client) loadRodSession() {
 		u, _ := url.Parse(BaseURL)
 		var httpCookies []*http.Cookie
 		for _, rc := range rodCookies {
-			httpCookies = append(httpCookies, &http.Cookie{
+			httpCookies = append(httpCookies, &http.Cookie{ // #nosec G124 -- preserving original browser cookie attributes
 				Name:     rc.Name,
 				Value:    rc.Value,
 				Domain:   rc.Domain,
 				Path:     rc.Path,
 				Secure:   rc.Secure,
 				HttpOnly: rc.HTTPOnly,
+				SameSite: rodSameSite(rc.SameSite),
 			})
 		}
 		c.HTTP.Jar.SetCookies(u, httpCookies)
