@@ -9,7 +9,7 @@ import (
 // shelfAriaLabels maps shelf names to the aria-label text in the shelf dialog.
 var shelfAriaLabels = map[string]string{
 	"want-to-read":      "Want to read",
-	"currently-reading":  "Currently reading",
+	"currently-reading": "Currently reading",
 	"read":              "Read",
 }
 
@@ -82,4 +82,3 @@ func MarkCurrentlyReading(b *Browser, bookID string) error {
 func MarkRead(b *Browser, bookID string) error {
 	return AddToShelf(b, bookID, "read")
 }
-

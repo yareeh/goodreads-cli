@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/yareeh/goodreads-cli/internal"
 	"github.com/spf13/cobra"
+	"github.com/yareeh/goodreads-cli/internal"
 )
 
 var (
@@ -43,11 +43,11 @@ var postReplyCmd = &cobra.Command{
 }
 
 var (
-	topicURL       string
-	topicSubject   string
-	topicMessage   string
-	topicBookID    string
-	topicAuthorID  string
+	topicURL      string
+	topicSubject  string
+	topicMessage  string
+	topicBookID   string
+	topicAuthorID string
 )
 
 var postTopicCmd = &cobra.Command{

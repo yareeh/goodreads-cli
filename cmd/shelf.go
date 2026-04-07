@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/yareeh/goodreads-cli/internal"
 	"github.com/spf13/cobra"
+	"github.com/yareeh/goodreads-cli/internal"
 )
 
 var shelfName string

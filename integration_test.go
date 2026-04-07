@@ -11,7 +11,7 @@ import (
 
 // Test data: well-known Goodreads books
 const (
-	testBookID    = "55145261"  // Project Hail Mary
+	testBookID    = "55145261" // Project Hail Mary
 	testBookTitle = "Project Hail Mary"
 	testBookQuery = "project hail mary andy weir"
 	// A safe book to add/remove from shelf during testing

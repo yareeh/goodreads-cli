@@ -153,7 +153,7 @@ func resolveAuthorName(b *Browser, authorID string) (string, error) {
 
 // openMentionBox clicks "add book/author" to open the lightbox.
 func openMentionBox(b *Browser) error {
-	addLink, err := b.Page.Timeout(5 * time.Second).ElementR(`a`, "add book/author")
+	addLink, err := b.Page.Timeout(5*time.Second).ElementR(`a`, "add book/author")
 	if err != nil {
 		saveDebugScreenshot(b)
 		return fmt.Errorf("could not find 'add book/author' link: %w", err)

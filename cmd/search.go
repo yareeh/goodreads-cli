@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yareeh/goodreads-cli/internal"
 	"github.com/spf13/cobra"
+	"github.com/yareeh/goodreads-cli/internal"
 )
 
 var searchJSONFlag bool
