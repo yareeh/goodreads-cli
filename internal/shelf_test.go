@@ -40,3 +40,22 @@ func TestShelfSelectorReadDoesNotMatchCurrentlyReading(t *testing.T) {
 		t.Errorf("Read selector should not contain 'reading': %q", sel)
 	}
 }
+
+func TestShelfClickJSIncludesLabel(t *testing.T) {
+	for _, label := range []string{"Currently reading", "Read", "Want to read"} {
+		js := shelfClickJS(label)
+		if !strings.Contains(js, label) {
+			t.Errorf("shelfClickJS(%q) does not contain label in script: %s", label, js)
+		}
+		if !strings.Contains(js, "click()") {
+			t.Errorf("shelfClickJS(%q) does not call click(): %s", label, js)
+		}
+		// Must check both aria-label and text content for robustness
+		if !strings.Contains(js, "aria-label") {
+			t.Errorf("shelfClickJS(%q) does not check aria-label: %s", label, js)
+		}
+		if !strings.Contains(js, "textContent") {
+			t.Errorf("shelfClickJS(%q) does not check textContent: %s", label, js)
+		}
+	}
+}

@@ -19,6 +19,26 @@ func shelfSelectorFor(label string) string {
 	return fmt.Sprintf(`button[aria-label*="%s"]`, label)
 }
 
+// shelfClickJS returns a JavaScript snippet that finds a shelf option button
+// by aria-label or text content and clicks it, returning true on success.
+// This is used as a fallback when the CSS selector fails.
+func shelfClickJS(label string) string {
+	return fmt.Sprintf(`() => {
+		const label = %q;
+		const lower = label.toLowerCase();
+		const candidates = document.querySelectorAll('button, [role="radio"], [role="option"], [role="menuitem"]');
+		for (const el of candidates) {
+			const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+			const textContent = el.textContent.trim().toLowerCase();
+			if (ariaLabel.includes(lower) || textContent === lower || textContent.includes(lower)) {
+				el.click();
+				return true;
+			}
+		}
+		return false;
+	}`, label)
+}
+
 // AddToShelf navigates to a book page and adds it to the specified shelf.
 func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	url := fmt.Sprintf("https://www.goodreads.com/book/show/%s", bookID)
@@ -70,10 +90,15 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 
 	option, err := b.Page.Timeout(10 * time.Second).Element(shelfSelectorFor(label))
 	if err != nil {
-		saveDebugScreenshot(b)
-		return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
+		// CSS selector failed — try JS text-content fallback before giving up
+		res, jsErr := b.Page.Eval(shelfClickJS(label))
+		if jsErr != nil || res == nil || !res.Value.Bool() {
+			saveDebugScreenshot(b)
+			return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
+		}
+	} else {
+		option.MustClick()
 	}
-	option.MustClick()
 	b.Page.MustWaitStable()
 
 	return b.SaveCookies()
