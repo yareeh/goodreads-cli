@@ -13,6 +13,12 @@ var shelfAriaLabels = map[string]string{
 	"read":              "Read",
 }
 
+// shelfSelectorFor builds a CSS selector for a shelf option button using
+// contains matching (*=) to tolerate minor Goodreads UI label variations.
+func shelfSelectorFor(label string) string {
+	return fmt.Sprintf(`button[aria-label*="%s"]`, label)
+}
+
 // AddToShelf navigates to a book page and adds it to the specified shelf.
 func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	url := fmt.Sprintf("https://www.goodreads.com/book/show/%s", bookID)
@@ -35,7 +41,7 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		// Book is unshelved — click "Want to Read" first to shelve it
 		editBtn.MustClick()
 		b.Page.MustWaitStable()
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 
 		if shelfName == "want-to-read" {
 			return b.SaveCookies()
@@ -51,9 +57,10 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		}
 	}
 
-	// Click the edit button to open the shelf dialog
+	// Click the edit button to open the shelf dialog, then wait for it to render
 	editBtn.MustClick()
-	time.Sleep(1 * time.Second)
+	b.Page.MustWaitStable()
+	time.Sleep(2 * time.Second)
 
 	// Select the target shelf from the dialog.
 	label, ok := shelfAriaLabels[shelfName]
@@ -61,8 +68,7 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		label = shelfName
 	}
 
-	selector := fmt.Sprintf(`button[aria-label="%s"], button[aria-label="%s, selected"]`, label, label)
-	option, err := b.Page.Timeout(5 * time.Second).Element(selector)
+	option, err := b.Page.Timeout(10 * time.Second).Element(shelfSelectorFor(label))
 	if err != nil {
 		saveDebugScreenshot(b)
 		return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
