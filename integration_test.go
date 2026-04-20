@@ -1,13 +1,53 @@
 package main
 
 import (
+	"bufio"
 	"encoding/base64"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/yareeh/goodreads-cli/internal"
 )
+
+// TestMain loads a .env file (if present) before running any tests, so
+// credentials can be stored locally in .env rather than exported in the shell.
+// In CI, standard GitHub Actions secrets set the same env vars.
+func TestMain(m *testing.M) {
+	loadDotEnv(".env")
+	os.Exit(m.Run())
+}
+
+// loadDotEnv reads KEY=VALUE pairs from path and sets them as env vars.
+// Lines starting with # and empty lines are ignored. Existing env vars win.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // file absent is fine
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		val = strings.TrimSpace(val)
+		if os.Getenv(key) == "" { // don't override existing env
+			os.Setenv(key, val)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "loadDotEnv: %v\n", err)
+	}
+}
 
 // Test data: well-known Goodreads books
 const (
@@ -320,4 +360,27 @@ func TestIntegrationMarkCurrentlyReading(t *testing.T) {
 		t.Fatalf("MarkCurrentlyReading: %v", err)
 	}
 	t.Log("Marked book as currently reading")
+}
+
+// TestIntegrationShelfCurrentlyReading exercises the exact path that was broken:
+// moving a shelved book to "currently-reading" via the shelf dialog.
+// The dialog button has aria-label="Currently Reading" (capital R) — previously
+// the code searched for "Currently reading" (lowercase r) which never matched.
+func TestIntegrationShelfCurrentlyReading(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
+
+	// Ensure the book is on want-to-read first so the dialog can be opened
+	if err := internal.AddToShelf(browser, testShelfBookID, "want-to-read"); err != nil {
+		t.Fatalf("AddToShelf(want-to-read) setup: %v", err)
+	}
+	time.Sleep(2 * time.Second)
+
+	// This is the previously-broken operation
+	if err := internal.AddToShelf(browser, testShelfBookID, "currently-reading"); err != nil {
+		t.Fatalf("AddToShelf(currently-reading): %v — shelf dialog option not found (check aria-label capitalisation)", err)
+	}
+	t.Log("Successfully moved book to currently-reading shelf")
 }
