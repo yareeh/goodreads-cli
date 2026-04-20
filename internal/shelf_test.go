@@ -10,9 +10,9 @@ func TestShelfSelectorForContainsLabel(t *testing.T) {
 		shelf string
 		label string
 	}{
-		{"currently-reading", "Currently reading"},
+		{"currently-reading", "Currently Reading"},
 		{"read", "Read"},
-		{"want-to-read", "Want to read"},
+		{"want-to-read", "Want to Read"},
 	}
 	for _, tt := range tests {
 		label := shelfAriaLabels[tt.shelf]
@@ -23,26 +23,27 @@ func TestShelfSelectorForContainsLabel(t *testing.T) {
 	}
 }
 
-func TestShelfSelectorUsesContainsMatch(t *testing.T) {
-	// selector must use *= (contains) not = (exact) to tolerate aria-label variations
-	sel := shelfSelectorFor("Currently reading")
-	if !strings.Contains(sel, "*=") {
-		t.Errorf("selector should use *= (contains match), got: %q", sel)
+func TestShelfSelectorUsesExactMatch(t *testing.T) {
+	// selector must use = (exact) not *= (contains) so "Read" never matches "Currently Reading"
+	sel := shelfSelectorFor("Currently Reading")
+	if strings.Contains(sel, "*=") {
+		t.Errorf("selector should use exact = not *= (contains), got: %q", sel)
+	}
+	if !strings.Contains(sel, `="Currently Reading"`) {
+		t.Errorf("selector must use exact aria-label match, got: %q", sel)
 	}
 }
 
 func TestShelfSelectorReadDoesNotMatchCurrentlyReading(t *testing.T) {
-	// "Read" contains-selector must not accidentally match "Currently reading"
-	sel := shelfSelectorFor("Read")
-	// The selector contains 'Read' but should not contain 'reading' as a sub-pattern
-	// (it uses *="Read" which is case-sensitive and won't match lowercase 'reading')
-	if strings.Contains(sel, "reading") {
-		t.Errorf("Read selector should not contain 'reading': %q", sel)
+	// With exact match (=), "Read" selector cannot match "Currently Reading"
+	readSel := shelfSelectorFor("Read")
+	if strings.Contains(readSel, "Currently") || strings.Contains(readSel, "Reading") {
+		t.Errorf("Read selector should not reference Currently Reading: %q", readSel)
 	}
 }
 
 func TestShelfClickJSIncludesLabel(t *testing.T) {
-	for _, label := range []string{"Currently reading", "Read", "Want to read"} {
+	for _, label := range []string{"Currently Reading", "Read", "Want to Read"} {
 		js := shelfClickJS(label)
 		if !strings.Contains(js, label) {
 			t.Errorf("shelfClickJS(%q) does not contain label in script: %s", label, js)
@@ -50,7 +51,6 @@ func TestShelfClickJSIncludesLabel(t *testing.T) {
 		if !strings.Contains(js, "click()") {
 			t.Errorf("shelfClickJS(%q) does not call click(): %s", label, js)
 		}
-		// Must check both aria-label and text content for robustness
 		if !strings.Contains(js, "aria-label") {
 			t.Errorf("shelfClickJS(%q) does not check aria-label: %s", label, js)
 		}
@@ -65,8 +65,8 @@ func TestShelfClickJSIncludesLabel(t *testing.T) {
 // If Goodreads changes these, the shelf selector will break and this test catches it.
 func TestShelfAriaLabelsMatchGoodreadsDOM(t *testing.T) {
 	expected := map[string]string{
-		"want-to-read":      "Want to read",
-		"currently-reading": "Currently reading",
+		"want-to-read":      "Want to Read",
+		"currently-reading": "Currently Reading",
 		"read":              "Read",
 	}
 	for shelf, wantLabel := range expected {
@@ -76,22 +76,21 @@ func TestShelfAriaLabelsMatchGoodreadsDOM(t *testing.T) {
 	}
 }
 
-// TestShelfSelectorReadDoesNotMatchWantToRead guards against *="Read" (capital R)
-// accidentally matching "Want to Read" if Goodreads ever capitalises that label.
-// Currently "Want to read" uses lowercase 'r', so the selector is safe.
+// TestShelfSelectorReadDoesNotMatchWantToRead verifies that exact match prevents
+// "Read" from matching "Want to Read".
 func TestShelfSelectorReadDoesNotMatchWantToRead(t *testing.T) {
-	readLabel := shelfAriaLabels["read"]     // "Read"
-	wtrLabel := shelfAriaLabels["want-to-read"] // "Want to read"
-	if strings.Contains(wtrLabel, readLabel) {
-		t.Errorf("want-to-read label %q contains read label %q — selector *=%q would false-match", wtrLabel, readLabel, readLabel)
+	readSel := shelfSelectorFor("Read")
+	// Exact selector button[aria-label="Read"] must not contain "Want"
+	if strings.Contains(readSel, "Want") {
+		t.Errorf("Read selector must not mention Want to Read: %q", readSel)
 	}
 }
 
 // TestShelfClickJSUsesLowerCase verifies the JS fallback lowercases both the search
-// label and the element text/aria-label before comparing, so "Currently reading"
-// matches even if the DOM uses different capitalisation.
+// label and the element text/aria-label before comparing, so it handles any
+// capitalisation Goodreads might use.
 func TestShelfClickJSUsesLowerCase(t *testing.T) {
-	for _, label := range []string{"Currently reading", "Read", "Want to read"} {
+	for _, label := range []string{"Currently Reading", "Read", "Want to Read"} {
 		js := shelfClickJS(label)
 		if !strings.Contains(js, "toLowerCase") {
 			t.Errorf("shelfClickJS(%q) does not use toLowerCase for case-insensitive matching: %s", label, js)
@@ -101,13 +100,9 @@ func TestShelfClickJSUsesLowerCase(t *testing.T) {
 
 // TestShelfButtonSelectorsMatchGoodreadsDOM documents the button selectors used to
 // find the shelf control on a book page (DOM inspection 2026-04):
-//   - Unshelved: aria-label contains "Tap to shelve book as want to read" (Button--wtr)
-//   - Shelved:   aria-label contains "Tap to edit shelf"
-//   - Dropdown:  aria-label contains "Tap to choose a shelf for this book" (Button--wtr)
+//   - Unshelved: aria-label = "Tap to shelve book as want to read" (Button--wtr)
+//   - Shelved:   aria-label contains "Tap to edit shelf" (Button--secondary)
 func TestShelfButtonSelectorsMatchGoodreadsDOM(t *testing.T) {
-	// The initial element search covers both shelved and unshelved states.
-	// button.Button--wtr matches the first WTR button on unshelved books.
-	// aria-label*="Tap to edit shelf" matches the edit button on shelved books.
 	wantSelectors := []string{
 		`button[aria-label*="Tap to edit shelf"]`,
 		`button.Button--wtr`,

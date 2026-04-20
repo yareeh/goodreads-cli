@@ -6,17 +6,18 @@ import (
 	"time"
 )
 
-// shelfAriaLabels maps shelf names to the aria-label text in the shelf dialog.
+// shelfAriaLabels maps shelf names to the exact aria-label text in the Goodreads
+// shelf dialog (verified by DOM inspection 2026-04).
 var shelfAriaLabels = map[string]string{
-	"want-to-read":      "Want to read",
-	"currently-reading": "Currently reading",
+	"want-to-read":      "Want to Read",
+	"currently-reading": "Currently Reading",
 	"read":              "Read",
 }
 
 // shelfSelectorFor builds a CSS selector for a shelf option button using
-// contains matching (*=) to tolerate minor Goodreads UI label variations.
+// exact matching (=) so "Read" never accidentally matches "Currently Reading".
 func shelfSelectorFor(label string) string {
-	return fmt.Sprintf(`button[aria-label*="%s"]`, label)
+	return fmt.Sprintf(`button[aria-label="%s"]`, label)
 }
 
 // shelfClickJS returns a JavaScript snippet that finds a shelf option button
