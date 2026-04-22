@@ -68,4 +68,11 @@ func saveDebugScreenshot(b *Browser) {
 	}
 	_ = os.WriteFile(path, data, 0600)
 	fmt.Fprintf(os.Stderr, "Debug screenshot saved to %s\n", path)
+
+	htmlPath := filepath.Join(home, "goodreads-cli-debug.html")
+	html, err := b.Page.HTML()
+	if err == nil {
+		_ = os.WriteFile(htmlPath, []byte(html), 0600)
+		fmt.Fprintf(os.Stderr, "Debug HTML saved to %s\n", htmlPath)
+	}
 }

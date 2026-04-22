@@ -27,11 +27,18 @@ func shelfClickJS(label string) string {
 	return fmt.Sprintf(`() => {
 		const label = %q;
 		const lower = label.toLowerCase();
-		const candidates = document.querySelectorAll('button, [role="radio"], [role="option"], [role="menuitem"]');
+		// Broad selector: any interactive-looking element inside a dialog/modal or the page
+		const candidates = document.querySelectorAll(
+			'button, [role="radio"], [role="option"], [role="menuitem"], ' +
+			'[role="listbox"] > *, [data-testid], label, div[class*="shelf"], ' +
+			'div[class*="Shelf"], span[class*="shelf"], span[class*="Shelf"]'
+		);
 		for (const el of candidates) {
 			const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
 			const textContent = el.textContent.trim().toLowerCase();
-			if (ariaLabel.includes(lower) || textContent === lower || textContent.includes(lower)) {
+			const testId = (el.getAttribute('data-testid') || '').toLowerCase();
+			if (ariaLabel.includes(lower) || textContent === lower ||
+				textContent.includes(lower) || testId.includes(lower.replace(/ /g, ''))) {
 				el.click();
 				return true;
 			}
