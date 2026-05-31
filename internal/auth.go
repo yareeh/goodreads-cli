@@ -8,13 +8,19 @@ import (
 )
 
 // Login authenticates with Goodreads via Amazon's OpenID flow using rod.
+//
+// Selector timeouts are generous (30s) because Goodreads' sign-in page can be
+// slow under load, occasionally rate-limits repeated logins, and runs a
+// Cloudflare challenge whose splash holds the SSO buttons off-DOM until it
+// clears. A 10s timeout (the original value) flaked frequently on consecutive
+// test runs.
 func Login(b *Browser, cfg *Config) error {
 	// Navigate to Goodreads sign-in
 	b.Page.MustNavigate("https://www.goodreads.com/user/sign_in")
 	b.Page.MustWaitStable()
 
 	// Click the "Sign in with email" button to go to Amazon's login form
-	signInBtn, err := b.Page.Timeout(10 * time.Second).Element(`.authPortalSignInButton`)
+	signInBtn, err := b.Page.Timeout(30 * time.Second).Element(`.authPortalSignInButton`)
 	if err != nil {
 		saveDebugScreenshot(b)
 		return fmt.Errorf("could not find 'Sign in with email' button: %w", err)
@@ -23,7 +29,7 @@ func Login(b *Browser, cfg *Config) error {
 	b.Page.MustWaitStable()
 
 	// Wait for the Amazon login form (ap_ prefixed IDs are Amazon's)
-	emailField, err := b.Page.Timeout(15 * time.Second).Element(`#ap_email, input[name="email"], input[type="email"]`)
+	emailField, err := b.Page.Timeout(30 * time.Second).Element(`#ap_email, input[name="email"], input[type="email"]`)
 	if err != nil {
 		saveDebugScreenshot(b)
 		return fmt.Errorf("could not find email field — run with --no-headless to debug: %w", err)

@@ -19,10 +19,19 @@ type Browser struct {
 
 // NewBrowser launches a Chrome instance and navigates to goodreads.com.
 // Set headless to false to see the browser for debugging.
+//
+// Chromium's setuid sandbox depends on either kernel.unprivileged_userns_clone
+// being enabled or running as root with the helper binary. Many Linux
+// environments (CI runners, the skyeclaw VM, ASUS kernels with the
+// "Copy Fail" mitigation enabled) satisfy neither — so the browser dies
+// with "No usable sandbox". goodreads-cli is an automation tool, not a
+// user-facing browser; the sandbox guarantees aren't load-bearing here.
+// Disable it on Linux unconditionally and let GOODREADS_BROWSER_SANDBOX=1
+// force it back on for the cases where it actually works.
 func NewBrowser(headless bool) (*Browser, error) {
 	l := launcher.New().
 		Headless(headless)
-	if os.Getenv("CI") != "" {
+	if os.Getenv("GOODREADS_BROWSER_SANDBOX") != "1" {
 		l = l.NoSandbox(true)
 	}
 	u, err := l.Launch()

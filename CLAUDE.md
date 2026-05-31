@@ -8,6 +8,25 @@ Go CLI for Goodreads using browser automation (rod) and HTTP scraping.
 go build -o goodreads .
 ```
 
+## Test
+
+Fast loop (unit tests + parser fixture, no network, no browser):
+
+```
+go test ./...
+```
+
+Full suite including live-Goodreads integration tests (browser via rod,
+~100s, sensitive to Goodreads rate limits — set GOODREADS_EMAIL and
+GOODREADS_PASSWORD or use .env):
+
+```
+go test -tags integration ./...
+```
+
+**The gated suite must be run and green before any `git push origin`.**
+The build tag exists to keep iteration fast, not to let slow tests rot.
+
 
 ## Development workflow (TDD)
 

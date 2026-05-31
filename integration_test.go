@@ -1,3 +1,18 @@
+//go:build integration
+
+// Integration tests in this file hit live Goodreads (HTTP search +
+// headless Chrome via rod for the browser flows). They take ~100s end
+// to end and are sensitive to Goodreads rate limits and UI changes.
+//
+// They're excluded from the default `go test ./...` so iteration stays
+// fast. Run them explicitly before any push:
+//
+//   go test -tags integration ./...
+//
+// Requires GOODREADS_EMAIL / GOODREADS_PASSWORD env vars (or a .env)
+// for the browser-based tests; pure HTTP tests skip cleanly when
+// credentials are absent.
+
 package main
 
 import (
@@ -307,6 +322,13 @@ func TestIntegrationLogin(t *testing.T) {
 	password := os.Getenv("GOODREADS_PASSWORD")
 	if email == "" || password == "" {
 		t.Skip("GOODREADS_EMAIL and GOODREADS_PASSWORD not set, skipping login test")
+	}
+
+	// Wipe any session cached by a prior run, otherwise NewBrowser
+	// auto-loads its cookies, /user/sign_in redirects to the home page,
+	// and Login() can't find the Sign-In button.
+	if err := internal.Logout(); err != nil {
+		t.Fatalf("clear cached session: %v", err)
 	}
 
 	browser, err := internal.NewBrowser(true)
