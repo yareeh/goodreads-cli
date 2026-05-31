@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -131,4 +132,33 @@ type autoCompleteResult struct {
 type autoCompleteAuth struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+// FetchBookDetails downloads a Goodreads book page by legacy ID and extracts
+// the full bibliographic record (ISBN, publisher, edition year, original
+// title, language, page count, …) from the embedded structured data.
+func (c *Client) FetchBookDetails(bookID string) (Book, error) {
+	reqURL := fmt.Sprintf("%s/book/show/%s", BaseURL, bookID)
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		return Book{}, fmt.Errorf("creating book request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+	req.Header.Set("Accept", "text/html")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return Book{}, fmt.Errorf("book request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return Book{}, fmt.Errorf("book page returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Book{}, fmt.Errorf("reading book page: %w", err)
+	}
+	return ParseBookDetailsFromHTML(string(body), bookID)
 }
