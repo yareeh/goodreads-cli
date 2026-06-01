@@ -5,14 +5,17 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/yareeh/goodreads-cli/internal/version"
 )
 
 var noHeadless bool
 
 var rootCmd = &cobra.Command{
-	Use:   "goodreads",
-	Short: "A CLI for interacting with Goodreads",
-	Long:  "goodreads-cli lets you search books, manage shelves, track reading progress, and post to discussions — all from the command line.",
+	Use:     "goodreads",
+	Short:   "A CLI for interacting with Goodreads",
+	Long:    "goodreads-cli lets you search books, manage shelves, track reading progress, and post to discussions — all from the command line.",
+	Version: version.Current(),
 }
 
 func Execute() {
