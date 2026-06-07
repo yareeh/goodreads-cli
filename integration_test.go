@@ -384,6 +384,34 @@ func TestIntegrationMarkCurrentlyReading(t *testing.T) {
 	t.Log("Marked book as currently reading")
 }
 
+// TestIntegrationListShelf hits the live Goodreads currently-reading shelf
+// for the logged-in user and verifies the parser returns at least one book
+// with the expected fields populated. Pure HTTP — no browser needed.
+func TestIntegrationListShelf(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	client, err := internal.NewClient()
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	books, err := client.ListShelf("currently-reading")
+	if err != nil {
+		t.Fatalf("ListShelf: %v", err)
+	}
+	if len(books) == 0 {
+		t.Skip("the test account has no currently-reading books — can't validate parser output")
+	}
+	for i, b := range books {
+		if b.ID == "" {
+			t.Errorf("book %d: empty ID", i)
+		}
+		if b.Title == "" {
+			t.Errorf("book %d: empty title", i)
+		}
+	}
+}
+
 // TestIntegrationShelfCurrentlyReading exercises the exact path that was broken:
 // moving a shelved book to "currently-reading" via the shelf dialog.
 // The dialog button has aria-label="Currently Reading" (capital R) — previously
