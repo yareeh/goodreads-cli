@@ -98,6 +98,58 @@ func TestShelfClickJSUsesLowerCase(t *testing.T) {
 	}
 }
 
+// TestParseShelvedAriaLabel verifies extraction of the current shelf name
+// from the post-action button's aria-label. The button reads e.g.
+// `Shelved as 'Want to Read'. Tap to edit shelf for this book` — we need
+// to pull "Want to Read" out so the post-action verifier can confirm the
+// click actually changed the shelf (issues #217 / #218: goodreads-cli
+// reported "Done!" but the shelf hadn't moved because the click on a
+// slow / WAF-walled page missed silently).
+func TestParseShelvedAriaLabel(t *testing.T) {
+	cases := []struct {
+		name, label, want string
+	}{
+		{
+			name:  "want-to-read",
+			label: "Shelved as 'Want to Read'. Tap to edit shelf for this book",
+			want:  "Want to Read",
+		},
+		{
+			name:  "currently-reading",
+			label: "Shelved as 'Currently Reading'. Tap to edit shelf for this book",
+			want:  "Currently Reading",
+		},
+		{
+			name:  "read",
+			label: "Shelved as 'Read'. Tap to edit shelf for this book",
+			want:  "Read",
+		},
+		{
+			name:  "custom shelf with spaces and apostrophe-free name",
+			label: "Shelved as 'Did Not Finish'. Tap to edit shelf for this book",
+			want:  "Did Not Finish",
+		},
+		{
+			name:  "unshelved button has no `Shelved as`",
+			label: "Tap to shelve book as want to read",
+			want:  "",
+		},
+		{
+			name:  "empty",
+			label: "",
+			want:  "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseShelvedAriaLabel(c.label)
+			if got != c.want {
+				t.Errorf("parseShelvedAriaLabel(%q) = %q, want %q", c.label, got, c.want)
+			}
+		})
+	}
+}
+
 // TestShelfButtonSelectorsMatchGoodreadsDOM documents the button selectors used to
 // find the shelf control on a book page (DOM inspection 2026-04):
 //   - Unshelved: aria-label = "Tap to shelve book as want to read" (Button--wtr)

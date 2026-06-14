@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -109,7 +110,62 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	}
 	b.Page.MustWaitStable()
 
+	// Post-action verification: the page button's aria-label flips to
+	// "Shelved as '<shelf>'. Tap to edit shelf for this book" once Goodreads
+	// commits the change server-side. Without this check the function used
+	// to report success even when the click happened on a slow / WAF-walled
+	// page and never reached the backend (issues #217, #218).
+	if err := verifyShelf(b, label); err != nil {
+		saveDebugScreenshot(b)
+		return err
+	}
+
 	return b.SaveCookies()
+}
+
+// verifyShelf polls the page button's aria-label until it confirms the book
+// is on `wantLabel`. Polls every 1s for up to 8s. Returns an error if the
+// shelf state never matches — the caller should treat this as a failed
+// shelf operation rather than a silent success.
+func verifyShelf(b *Browser, wantLabel string) error {
+	deadline := time.Now().Add(8 * time.Second)
+	var last string
+	for {
+		el, err := b.Page.Timeout(2 * time.Second).Element(`button[aria-label*="Tap to edit shelf"]`)
+		if err == nil {
+			al, _ := el.Attribute("aria-label")
+			if al != nil {
+				last = parseShelvedAriaLabel(*al)
+				if last == wantLabel {
+					return nil
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if last == "" {
+		return fmt.Errorf("shelf operation could not be verified — button aria-label never read 'Shelved as ...'")
+	}
+	return fmt.Errorf("shelf operation appeared to land on %q, not %q", last, wantLabel)
+}
+
+// _shelvedAriaLabelRE matches the post-action button's aria-label —
+// "Shelved as 'Want to Read'. Tap to edit shelf for this book" — and
+// captures the current shelf's display name.
+var _shelvedAriaLabelRE = regexp.MustCompile(`Shelved as '([^']+)'`)
+
+// parseShelvedAriaLabel returns the current shelf's display name from a
+// shelf-button aria-label, or "" if the label doesn't indicate a shelved
+// state. Issues #217 / #218.
+func parseShelvedAriaLabel(label string) string {
+	m := _shelvedAriaLabelRE.FindStringSubmatch(label)
+	if m == nil {
+		return ""
+	}
+	return m[1]
 }
 
 // MarkCurrentlyReading adds a book to the "currently-reading" shelf.
