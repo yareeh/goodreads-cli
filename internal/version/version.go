@@ -12,7 +12,7 @@ import (
 // Constant is the version baked into the binary at release time. It's the
 // fallback used when runtime/debug doesn't know the module version (e.g.
 // `go run .` or local builds without a tag). Bump on every release.
-const Constant = "1.7.2"
+const Constant = "1.8.0"
 
 // Current returns the active goodreads-cli version, preferring the module
 // version reported by runtime/debug (set by `go install github.com/yareeh/
