@@ -28,8 +28,12 @@ func rodSameSite(ss proto.NetworkCookieSameSite) http.SameSite {
 }
 
 // Client is a plain HTTP client for operations that don't need a browser (e.g. search).
+//
+// Log mirrors the Browser field of the same name so both interaction paths
+// end up in the same JSON tail when the error handler dumps it.
 type Client struct {
 	HTTP *http.Client
+	Log  *InteractionLog
 }
 
 // NewClient creates a new HTTP client, loading cookies from the rod session file if available.
@@ -41,6 +45,7 @@ func NewClient() (*Client, error) {
 
 	client := &Client{
 		HTTP: &http.Client{Jar: jar},
+		Log:  NewInteractionLog(),
 	}
 
 	// Load cookies saved by the rod browser session
@@ -97,9 +102,11 @@ func (c *Client) Search(query string) ([]Book, error) {
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
+		c.Log.Record("http_search", map[string]any{"url": reqURL}, err)
 		return nil, fmt.Errorf("search request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	c.Log.Record("http_search", map[string]any{"url": reqURL, "status": resp.StatusCode}, nil)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("search returned status %d", resp.StatusCode)
@@ -148,9 +155,11 @@ func (c *Client) FetchBookDetails(bookID string) (Book, error) {
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
+		c.Log.Record("http_book_details", map[string]any{"url": reqURL}, err)
 		return Book{}, fmt.Errorf("book request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	c.Log.Record("http_book_details", map[string]any{"url": reqURL, "status": resp.StatusCode}, nil)
 
 	if resp.StatusCode != http.StatusOK {
 		return Book{}, fmt.Errorf("book page returned status %d", resp.StatusCode)

@@ -12,9 +12,14 @@ import (
 )
 
 // Browser wraps a rod browser and page for Goodreads interactions.
+//
+// Log accumulates every server interaction attempted during the session so
+// error paths can dump the JSON tail into a bug report — see
+// InteractionLog.Dump and saveDebugArtifacts.
 type Browser struct {
 	Rod  *rod.Browser
 	Page *rod.Page
+	Log  *InteractionLog
 }
 
 // NewBrowser launches a Chrome instance and navigates to goodreads.com.
@@ -51,7 +56,8 @@ func NewBrowser(headless bool) (*Browser, error) {
 	}
 	page.MustWaitStable()
 
-	b := &Browser{Rod: browser, Page: page}
+	b := &Browser{Rod: browser, Page: page, Log: NewInteractionLog()}
+	b.Log.Record("browser_launch", map[string]any{"headless": headless}, nil)
 
 	if err := b.LoadCookies(); err == nil {
 		// Reload page with cookies applied
