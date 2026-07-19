@@ -16,13 +16,16 @@ import (
 // test runs.
 func Login(b *Browser, cfg *Config) error {
 	// Navigate to Goodreads sign-in
-	b.Page.MustNavigate("https://www.goodreads.com/user/sign_in")
+	signInURL := "https://www.goodreads.com/user/sign_in"
+	b.Log.Record("navigate", map[string]any{"url": signInURL, "purpose": "login"}, nil)
+	b.Page.MustNavigate(signInURL)
 	b.Page.MustWaitStable()
 
 	// Click the "Sign in with email" button to go to Amazon's login form
 	signInBtn, err := b.Page.Timeout(30 * time.Second).Element(`.authPortalSignInButton`)
+	b.Log.Record("find_signin_button", map[string]any{"selector": ".authPortalSignInButton"}, err)
 	if err != nil {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return fmt.Errorf("could not find 'Sign in with email' button: %w", err)
 	}
 	signInBtn.MustClick()
@@ -31,7 +34,7 @@ func Login(b *Browser, cfg *Config) error {
 	// Wait for the Amazon login form (ap_ prefixed IDs are Amazon's)
 	emailField, err := b.Page.Timeout(30 * time.Second).Element(`#ap_email, input[name="email"], input[type="email"]`)
 	if err != nil {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return fmt.Errorf("could not find email field — run with --no-headless to debug: %w", err)
 	}
 
@@ -39,7 +42,7 @@ func Login(b *Browser, cfg *Config) error {
 
 	passwordField, err := b.Page.Timeout(5 * time.Second).Element(`#ap_password, input[name="password"], input[type="password"]`)
 	if err != nil {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return fmt.Errorf("could not find password field: %w", err)
 	}
 	passwordField.MustSelectAllText().MustInput(cfg.Password)
@@ -47,7 +50,7 @@ func Login(b *Browser, cfg *Config) error {
 	// Submit the form
 	submitBtn, err := b.Page.Timeout(5 * time.Second).Element(`#signInSubmit, input[type="submit"], button[type="submit"]`)
 	if err != nil {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return fmt.Errorf("could not find submit button: %w", err)
 	}
 	submitBtn.MustClick()
@@ -58,27 +61,50 @@ func Login(b *Browser, cfg *Config) error {
 
 	// Verify login succeeded
 	if !b.IsLoggedIn() {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return fmt.Errorf("login failed — check your credentials in %s, or run with --no-headless to check for CAPTCHA/2FA", ConfigPath())
 	}
 
 	return b.SaveCookies()
 }
 
-func saveDebugScreenshot(b *Browser) {
+// saveDebugArtifacts writes as much of the failure context to disk as it
+// can — screenshot, current HTML, and the in-memory interaction log —
+// treating each artifact independently. Previously the screenshot early-
+// returned on any error, so a Cloudflare interstitial that blocked
+// screenshots also silently dropped the HTML and log; the user opening a
+// bug report saw an empty ~/goodreads-cli-debug.* set. Each artifact now
+// prints its own outcome so the user knows exactly which files landed.
+func saveDebugArtifacts(b *Browser) {
 	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, "goodreads-cli-debug.png")
-	data, err := b.Page.Screenshot(true, nil)
-	if err != nil {
-		return
+
+	pngPath := filepath.Join(home, "goodreads-cli-debug.png")
+	if data, err := b.Page.Screenshot(true, nil); err == nil {
+		if werr := os.WriteFile(pngPath, data, 0600); werr == nil {
+			fmt.Fprintf(os.Stderr, "Debug screenshot saved to %s\n", pngPath)
+		} else {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", pngPath, werr)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "Debug screenshot unavailable: %v\n", err)
 	}
-	_ = os.WriteFile(path, data, 0600)
-	fmt.Fprintf(os.Stderr, "Debug screenshot saved to %s\n", path)
 
 	htmlPath := filepath.Join(home, "goodreads-cli-debug.html")
-	html, err := b.Page.HTML()
-	if err == nil {
-		_ = os.WriteFile(htmlPath, []byte(html), 0600)
-		fmt.Fprintf(os.Stderr, "Debug HTML saved to %s\n", htmlPath)
+	if html, err := b.Page.HTML(); err == nil {
+		if werr := os.WriteFile(htmlPath, []byte(html), 0600); werr == nil {
+			fmt.Fprintf(os.Stderr, "Debug HTML saved to %s\n", htmlPath)
+		} else {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", htmlPath, werr)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "Debug HTML unavailable: %v\n", err)
+	}
+
+	logPath := DebugLogPath()
+	if err := b.Log.Dump(logPath); err == nil {
+		fmt.Fprintf(os.Stderr, "Interaction log saved to %s — attach to bug report\n", logPath)
+	} else {
+		fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", logPath, err)
 	}
 }
+
