@@ -51,6 +51,7 @@ func shelfClickJS(label string) string {
 // AddToShelf navigates to a book page and adds it to the specified shelf.
 func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	url := fmt.Sprintf("https://www.goodreads.com/book/show/%s", bookID)
+	b.Log.Record("navigate", map[string]any{"url": url, "bookID": bookID, "shelf": shelfName}, nil)
 	b.Page.MustNavigate(url)
 	b.Page.MustWaitStable()
 
@@ -58,17 +59,23 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	editBtn, err := b.Page.Timeout(10 * time.Second).Element(
 		`button[aria-label*="Tap to edit shelf"], button.Button--wtr`,
 	)
+	b.Log.Record("find_shelf_button", map[string]any{"selector": `button[aria-label*="Tap to edit shelf"], button.Button--wtr`}, err)
 	if err != nil {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return fmt.Errorf("could not find shelf button on book page: %w", err)
 	}
 
 	ariaLabel, _ := editBtn.Attribute("aria-label")
 	alreadyShelved := ariaLabel != nil && strings.Contains(*ariaLabel, "Tap to edit shelf")
+	b.Log.Record("shelf_button_state", map[string]any{
+		"ariaLabel":      derefString(ariaLabel),
+		"alreadyShelved": alreadyShelved,
+	}, nil)
 
 	if !alreadyShelved {
 		// Book is unshelved — click "Want to Read" first to shelve it
 		editBtn.MustClick()
+		b.Log.Record("click_shelf_button", map[string]any{"variant": "wtr_shelve"}, nil)
 		b.Page.MustWaitStable()
 		time.Sleep(2 * time.Second)
 
@@ -80,14 +87,16 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		editBtn, err = b.Page.Timeout(10 * time.Second).Element(
 			`button[aria-label*="Tap to edit shelf"]`,
 		)
+		b.Log.Record("find_edit_button_after_shelve", nil, err)
 		if err != nil {
-			saveDebugScreenshot(b)
+			saveDebugArtifacts(b)
 			return fmt.Errorf("book was shelved but edit button did not appear: %w", err)
 		}
 	}
 
 	// Click the edit button to open the shelf dialog, then wait for it to render
 	editBtn.MustClick()
+	b.Log.Record("click_shelf_button", map[string]any{"variant": "open_edit_dialog"}, nil)
 	b.Page.MustWaitStable()
 	time.Sleep(2 * time.Second)
 
@@ -98,15 +107,19 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	}
 
 	option, err := b.Page.Timeout(10 * time.Second).Element(shelfSelectorFor(label))
+	b.Log.Record("find_shelf_option", map[string]any{"selector": shelfSelectorFor(label), "label": label}, err)
 	if err != nil {
 		// CSS selector failed — try JS text-content fallback before giving up
 		res, jsErr := b.Page.Eval(shelfClickJS(label))
-		if jsErr != nil || res == nil || !res.Value.Bool() {
-			saveDebugScreenshot(b)
+		jsFound := jsErr == nil && res != nil && res.Value.Bool()
+		b.Log.Record("shelf_option_js_fallback", map[string]any{"label": label, "found": jsFound}, jsErr)
+		if !jsFound {
+			saveDebugArtifacts(b)
 			return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
 		}
 	} else {
 		option.MustClick()
+		b.Log.Record("click_shelf_option", map[string]any{"label": label}, nil)
 	}
 	b.Page.MustWaitStable()
 
@@ -116,11 +129,21 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	// to report success even when the click happened on a slow / WAF-walled
 	// page and never reached the backend (issues #217, #218).
 	if err := verifyShelf(b, label); err != nil {
-		saveDebugScreenshot(b)
+		saveDebugArtifacts(b)
 		return err
 	}
 
 	return b.SaveCookies()
+}
+
+// derefString returns the value of s, or "" if s is nil. Used only to keep
+// interaction-log details JSON-serialisable (a nil *string marshals to
+// "null", which is fine but harder to eyeball in a bug report).
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // verifyShelf polls the page button's aria-label until it confirms the book
@@ -136,10 +159,15 @@ func verifyShelf(b *Browser, wantLabel string) error {
 			al, _ := el.Attribute("aria-label")
 			if al != nil {
 				last = parseShelvedAriaLabel(*al)
-				if last == wantLabel {
+				b.Log.Record("verify_shelf_poll", map[string]any{
+					"ariaLabel": *al, "parsed": last, "want": wantLabel,
+				}, nil)
+				if shelfLabelsMatch(last, wantLabel) {
 					return nil
 				}
 			}
+		} else {
+			b.Log.Record("verify_shelf_poll", map[string]any{"want": wantLabel}, err)
 		}
 		if time.Now().After(deadline) {
 			break
@@ -150,6 +178,16 @@ func verifyShelf(b *Browser, wantLabel string) error {
 		return fmt.Errorf("shelf operation could not be verified — button aria-label never read 'Shelved as ...'")
 	}
 	return fmt.Errorf("shelf operation appeared to land on %q, not %q", last, wantLabel)
+}
+
+// shelfLabelsMatch compares two shelf display names in a way that survives
+// Goodreads shifting the aria-label's capitalisation or padding it with
+// whitespace. The exact string match used previously flagged
+// `Currently Reading` vs `currently reading` as a mismatch and made
+// verifyShelf falsely report failure even when the shelf had actually
+// changed (bug: "failed to add book to currently reading shelf").
+func shelfLabelsMatch(got, want string) bool {
+	return strings.EqualFold(strings.TrimSpace(got), strings.TrimSpace(want))
 }
 
 // _shelvedAriaLabelRE matches the post-action button's aria-label —

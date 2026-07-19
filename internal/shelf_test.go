@@ -150,6 +150,37 @@ func TestParseShelvedAriaLabel(t *testing.T) {
 	}
 }
 
+// TestShelfLabelsMatch documents the tolerance envelope for verifyShelf's
+// aria-label comparison. Bug: "failed to add book to currently reading
+// shelf" — the previous exact string match tripped whenever Goodreads'
+// aria-label shifted casing or padding, even when the shelf had actually
+// changed. Match must survive Goodreads emitting any of "Currently Reading",
+// "currently reading", or "Currently Reading " with trailing space.
+func TestShelfLabelsMatch(t *testing.T) {
+	cases := []struct {
+		name       string
+		got, want  string
+		wantResult bool
+	}{
+		{"exact", "Currently Reading", "Currently Reading", true},
+		{"lowercase", "currently reading", "Currently Reading", true},
+		{"uppercase", "CURRENTLY READING", "Currently Reading", true},
+		{"trailing space", "Currently Reading ", "Currently Reading", true},
+		{"leading tab", "\tCurrently Reading", "Currently Reading", true},
+		{"different shelf", "Read", "Currently Reading", false},
+		{"want-to-read vs currently-reading", "Want to Read", "Currently Reading", false},
+		{"empty got", "", "Currently Reading", false},
+		{"substring should NOT match", "Currently", "Currently Reading", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := shelfLabelsMatch(c.got, c.want); got != c.wantResult {
+				t.Errorf("shelfLabelsMatch(%q, %q) = %v, want %v", c.got, c.want, got, c.wantResult)
+			}
+		})
+	}
+}
+
 // TestShelfButtonSelectorsMatchGoodreadsDOM documents the button selectors used to
 // find the shelf control on a book page (DOM inspection 2026-04):
 //   - Unshelved: aria-label = "Tap to shelve book as want to read" (Button--wtr)
