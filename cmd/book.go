@@ -27,12 +27,18 @@ Example:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 
-		client, err := internal.NewClient()
+		// The /book/show/<id> endpoint has been walled behind AWS WAF
+		// since July 2026 — the plain HTTP client sees a 202 JS
+		// challenge. Route through rod, which executes the challenge
+		// and lands us on the real page.
+		fmt.Fprintln(cmd.ErrOrStderr(), "Launching browser (needed to clear AWS WAF challenge on book pages)…")
+		browser, err := internal.NewBrowser(!noHeadless)
 		if err != nil {
-			return fmt.Errorf("creating client: %w", err)
+			return fmt.Errorf("launching browser: %w", err)
 		}
+		defer browser.Close()
 
-		book, err := client.FetchBookDetails(id)
+		book, err := browser.FetchBookDetails(id)
 		if err != nil {
 			return fmt.Errorf("fetching book details: %w", err)
 		}

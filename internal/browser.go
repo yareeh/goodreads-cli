@@ -73,6 +73,91 @@ func (b *Browser) Close() {
 	b.Rod.MustClose()
 }
 
+// FetchRenderedHTML navigates the browser to url, waits for the page to
+// settle — including any AWS WAF JavaScript challenge — and returns the
+// resulting HTML. This is how goodreads-cli reaches page endpoints that
+// the plain HTTP client can't touch anymore: Chrome runs the WAF JS,
+// picks up the aws-waf-token cookie, reloads to the real page, and we
+// read back the fully rendered DOM.
+//
+// If after MustWaitStable the DOM still carries the WAF challenge
+// markers (gokuProps / awsWafCookieDomainList), FetchRenderedHTML polls
+// for up to ~15 s giving Chrome time to complete the challenge and
+// auto-reload before returning ErrAWSWAFChallenge.
+func (b *Browser) FetchRenderedHTML(url string) (string, error) {
+	b.Log.Record("navigate", map[string]any{"url": url, "via": "browser"}, nil)
+	if err := b.Page.Navigate(url); err != nil {
+		b.Log.Record("navigate_error", map[string]any{"url": url}, err)
+		return "", fmt.Errorf("navigating %s: %w", url, err)
+	}
+	if err := b.Page.WaitLoad(); err != nil {
+		b.Log.Record("wait_load", map[string]any{"url": url}, err)
+	}
+	// MustWaitStable waits for the network to go idle — during a WAF
+	// challenge Chrome issues the follow-up request itself, so waiting
+	// for stability lands us on the post-challenge page in the common
+	// case. Cap it because a page with continuous polling (analytics,
+	// live-update widgets) never settles.
+	b.Page.Timeout(15 * time.Second).MustWaitStable()
+
+	html, err := b.Page.HTML()
+	if err != nil {
+		b.Log.Record("read_html", map[string]any{"url": url}, err)
+		return "", fmt.Errorf("reading rendered HTML: %w", err)
+	}
+	// One more chance: if we still see the WAF landing page in the DOM,
+	// poll a few more times so Chrome's follow-up request can complete.
+	if isAWSWAFChallengeBody(html) {
+		deadline := time.Now().Add(15 * time.Second)
+		for time.Now().Before(deadline) {
+			time.Sleep(1 * time.Second)
+			html, err = b.Page.HTML()
+			if err == nil && !isAWSWAFChallengeBody(html) {
+				break
+			}
+		}
+	}
+	if isAWSWAFChallengeBody(html) {
+		b.Log.Record("waf_still_blocking", map[string]any{"url": url, "bytes": len(html)}, ErrAWSWAFChallenge)
+		return "", fmt.Errorf("%w (url=%s)", ErrAWSWAFChallenge, url)
+	}
+	b.Log.Record("read_html", map[string]any{"url": url, "bytes": len(html)}, nil)
+	return html, nil
+}
+
+// FetchBookDetails navigates to /book/show/<id> in the browser and returns
+// the parsed bibliographic record. Prefer this over Client.FetchBookDetails
+// — the book-show endpoint has been walled behind AWS WAF since July 2026
+// and the plain HTTP client can no longer reach it.
+func (b *Browser) FetchBookDetails(bookID string) (Book, error) {
+	u := fmt.Sprintf("%s/book/show/%s", BaseURL, bookID)
+	html, err := b.FetchRenderedHTML(u)
+	if err != nil {
+		return Book{}, fmt.Errorf("fetching book %s: %w", bookID, err)
+	}
+	return ParseBookDetailsFromHTML(html, bookID)
+}
+
+// ListShelf navigates through the browser to the logged-in user's shelf
+// page and returns the parsed books. Same WAF motivation as
+// FetchBookDetails.
+func (b *Browser) ListShelf(shelfName string) ([]Book, error) {
+	homeHTML, err := b.FetchRenderedHTML(BaseURL + "/")
+	if err != nil {
+		return nil, fmt.Errorf("fetching home page: %w", err)
+	}
+	userID, err := ExtractUserIDFromHomeHTML(homeHTML)
+	if err != nil {
+		return nil, err
+	}
+	u := fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100", BaseURL, userID, shelfName)
+	html, err := b.FetchRenderedHTML(u)
+	if err != nil {
+		return nil, fmt.Errorf("fetching shelf %q: %w", shelfName, err)
+	}
+	return ParseShelfHTML(html)
+}
+
 // IsLoggedIn checks if the user is logged in by looking for user-specific elements.
 func (b *Browser) IsLoggedIn() bool {
 	// Look for the user nav dropdown that appears when logged in

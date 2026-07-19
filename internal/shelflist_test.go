@@ -96,3 +96,44 @@ func TestExtractUserIDFromHomeHTML_NoMatchReturnsError(t *testing.T) {
 		t.Fatal("expected error when no /user/show/ link is present")
 	}
 }
+
+// TestIsAWSWAFChallengeBody documents the AWS WAF landing-page signature we
+// key off of. Goodreads started serving these (status 202) on the
+// /review/list/… shelf endpoint in July 2026, so the pure-HTTP fetch path
+// needs to detect them and surface ErrAWSWAFChallenge to callers instead
+// of leaking through as a generic "status 202".
+func TestIsAWSWAFChallengeBody(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			name: "aws waf challenge with gokuProps",
+			body: `<!DOCTYPE html><html><head><script>window.awsWafCookieDomainList = []; window.gokuProps = {"key":"..."};</script></head></html>`,
+			want: true,
+		},
+		{
+			name: "aws waf challenge with only awsWafCookieDomainList marker",
+			body: `<script>window.awsWafCookieDomainList = [".goodreads.com"];</script>`,
+			want: true,
+		},
+		{
+			name: "regular goodreads shelf HTML",
+			body: `<html><body><tr id="review_1" class="bookalike review">…</tr></body></html>`,
+			want: false,
+		},
+		{
+			name: "empty body",
+			body: "",
+			want: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isAWSWAFChallengeBody(c.body); got != c.want {
+				t.Errorf("isAWSWAFChallengeBody(...) = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

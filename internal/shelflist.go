@@ -1,12 +1,31 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
 )
+
+// ErrAWSWAFChallenge is returned by ListShelf-style HTTP fetches when
+// Goodreads responds with an AWS WAF JavaScript challenge (status 202 with
+// a body containing `gokuProps` / `awsWafCookieDomainList`) instead of the
+// requested HTML. The plain HTTP client cannot solve the challenge — a
+// browser-based fallback is needed. Callers (and tests) can detect this
+// with errors.Is so they can degrade gracefully instead of reporting the
+// generic "status 202" that used to leak through.
+var ErrAWSWAFChallenge = errors.New("goodreads returned AWS WAF challenge — browser session cookie needed")
+
+// isAWSWAFChallengeBody reports whether the response body is the AWS WAF
+// JS challenge landing page. AWS WAF injects `awsWafCookieDomainList` and a
+// `gokuProps` block into the tiny HTML wrapper it serves before letting the
+// real request through.
+func isAWSWAFChallengeBody(body string) bool {
+	return strings.Contains(body, "awsWafCookieDomainList") ||
+		strings.Contains(body, "gokuProps")
+}
 
 // ParseShelfHTML extracts Book records from the HTML of a
 // /review/list/<user_id>?shelf=<name> page. Each book appears as
@@ -77,15 +96,21 @@ func (c *Client) fetchHTML(url string) (string, error) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
+		c.Log.Record("http_fetch_html", map[string]any{"url": url}, err)
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		c.Log.Record("http_fetch_html", map[string]any{"url": url, "status": resp.StatusCode}, err)
 		return "", err
+	}
+	c.Log.Record("http_fetch_html", map[string]any{"url": url, "status": resp.StatusCode, "bytes": len(body)}, nil)
+	if resp.StatusCode == http.StatusAccepted && isAWSWAFChallengeBody(string(body)) {
+		return "", fmt.Errorf("%w (url=%s)", ErrAWSWAFChallenge, url)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return string(body), nil
 }

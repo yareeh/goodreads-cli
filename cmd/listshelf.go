@@ -29,12 +29,22 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		shelfName := args[0]
 
-		client, err := internal.NewClient()
+		// The /review/list/<user>?shelf=… endpoint has been walled
+		// behind AWS WAF since July 2026 — the plain HTTP client sees
+		// a 202 JS challenge. Route through rod, which executes the
+		// challenge and returns the real page.
+		fmt.Fprintln(cmd.ErrOrStderr(), "Launching browser (needed to clear AWS WAF challenge on shelf pages)…")
+		browser, err := internal.NewBrowser(!noHeadless)
 		if err != nil {
-			return fmt.Errorf("creating client: %w", err)
+			return fmt.Errorf("launching browser: %w", err)
+		}
+		defer browser.Close()
+
+		if !browser.IsLoggedIn() {
+			return fmt.Errorf("not logged in — run 'goodreads login' first")
 		}
 
-		books, err := client.ListShelf(shelfName)
+		books, err := browser.ListShelf(shelfName)
 		if err != nil {
 			return fmt.Errorf("listing shelf %q: %w", shelfName, err)
 		}

@@ -18,6 +18,7 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -387,6 +388,12 @@ func TestIntegrationMarkCurrentlyReading(t *testing.T) {
 // TestIntegrationListShelf hits the live Goodreads currently-reading shelf
 // for the logged-in user and verifies the parser returns at least one book
 // with the expected fields populated. Pure HTTP — no browser needed.
+//
+// Skips when Goodreads walls the endpoint behind an AWS WAF JavaScript
+// challenge (they started doing this in July 2026 — see goodreads-cli
+// issue tracking the browser-fallback workaround). Detecting the WAF
+// response is a real code path, not a test hack: production callers get
+// ErrAWSWAFChallenge so they can degrade explicitly.
 func TestIntegrationListShelf(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
@@ -396,6 +403,9 @@ func TestIntegrationListShelf(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	books, err := client.ListShelf("currently-reading")
+	if errors.Is(err, internal.ErrAWSWAFChallenge) {
+		t.Skipf("ListShelf blocked by AWS WAF: %v — browser-fallback fetch not yet implemented", err)
+	}
 	if err != nil {
 		t.Fatalf("ListShelf: %v", err)
 	}
@@ -409,6 +419,54 @@ func TestIntegrationListShelf(t *testing.T) {
 		if b.Title == "" {
 			t.Errorf("book %d: empty title", i)
 		}
+	}
+}
+
+// TestIntegrationListShelfViaBrowser exercises the browser-fallback
+// production path — the plain HTTP client is now WAF-blocked, and this
+// test proves rod can navigate through the WAF JS challenge and return
+// the shelf HTML the parser expects.
+func TestIntegrationListShelfViaBrowser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
+
+	books, err := browser.ListShelf("currently-reading")
+	if err != nil {
+		t.Fatalf("browser.ListShelf: %v", err)
+	}
+	if len(books) == 0 {
+		t.Skip("the test account has no currently-reading books — can't validate parser output")
+	}
+	for i, b := range books {
+		if b.ID == "" {
+			t.Errorf("book %d: empty ID", i)
+		}
+		if b.Title == "" {
+			t.Errorf("book %d: empty title", i)
+		}
+	}
+}
+
+// TestIntegrationFetchBookDetailsViaBrowser exercises the browser-fallback
+// path for /book/show/<id>. Same WAF motivation as ListShelf above.
+func TestIntegrationFetchBookDetailsViaBrowser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
+
+	// The Anthropocene Reviewed by John Green — stable, always-in-index.
+	book, err := browser.FetchBookDetails("55145261")
+	if err != nil {
+		t.Fatalf("browser.FetchBookDetails: %v", err)
+	}
+	if book.Title == "" {
+		t.Errorf("empty title, got %+v", book)
+	}
+	if book.Author == "" {
+		t.Errorf("empty author, got %+v", book)
 	}
 }
 
