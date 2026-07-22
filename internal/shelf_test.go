@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -147,6 +148,42 @@ func TestParseShelvedAriaLabel(t *testing.T) {
 				t.Errorf("parseShelvedAriaLabel(%q) = %q, want %q", c.label, got, c.want)
 			}
 		})
+	}
+}
+
+// TestShelfDialogOpenerSelectorsMatchGoodreadsDOM documents the aria-labels
+// used to find the dropdown-chevron that opens the shelf-picker dialog next
+// to the WTR/edit button. Issue #230 caught the previous flow ("click WTR
+// to shelve, wait for SPA rerender, click edit button") flaking on both
+// paths: sometimes the click didn't register server-side, sometimes the
+// rerender never fired. Opening the dialog directly via the chevron is a
+// one-click path that avoids both classes of failure. Keeping the exact
+// aria-label strings under test guards against a Goodreads DOM shift
+// slipping through unnoticed.
+func TestShelfDialogOpenerSelectorsMatchGoodreadsDOM(t *testing.T) {
+	src, err := os.ReadFile("shelf.go")
+	if err != nil {
+		t.Fatalf("read shelf.go: %v", err)
+	}
+	body := string(src)
+	for _, needle := range []string{
+		// Unshelved-book chevron (verified in issue #230 debug HTML).
+		`"Tap to choose a shelf for this book"`,
+		// Shelved-book variant seen in earlier Goodreads DOM snapshots.
+		`edit shelf choice`,
+	} {
+		if !strings.Contains(body, needle) {
+			t.Errorf("shelf.go missing shelf-dialog-opener aria-label %q — Goodreads DOM guard is missing", needle)
+		}
+	}
+	// The new interaction-log kinds that runbooks / bug-report greps rely on.
+	for _, kind := range []string{
+		`"click_dialog_opener_js"`,
+		`"dialog_opener_fallback"`,
+	} {
+		if !strings.Contains(body, kind) {
+			t.Errorf("shelf.go missing interaction-log kind %s — grep target changed", kind)
+		}
 	}
 }
 

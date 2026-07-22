@@ -72,31 +72,54 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		"alreadyShelved": alreadyShelved,
 	}, nil)
 
-	if !alreadyShelved {
-		// Book is unshelved — click "Want to Read" first to shelve it
-		editBtn.MustClick()
-		b.Log.Record("click_shelf_button", map[string]any{"variant": "wtr_shelve"}, nil)
-		b.Page.MustWaitStable()
-		time.Sleep(2 * time.Second)
-
-		if shelfName == "want-to-read" {
-			return b.SaveCookies()
+	// The BookActions ButtonGroup on the current Goodreads book page is a
+	// pair: the main WTR/edit button plus a chevron dropdown next to it
+	// (aria-label="Tap to choose a shelf for this book" when unshelved,
+	// "Edit shelf choice"-style when shelved) that opens the shelf-picker
+	// dialog directly. Going through the dropdown is a one-click path to
+	// the dialog and works identically whether the book is already shelved
+	// or not — sidestepping the old two-step "click WTR → wait for the SPA
+	// to rerender the button into the edit variant → click again" flow,
+	// which flaked when the rerender never fired and left the click either
+	// silently ignored (issue #230: nothing shelved, edit button never
+	// appeared) or landing on a stale button.
+	//
+	// Both the desktop and mobile layouts render this ButtonGroup, so the
+	// selector matches multiple elements — one is hidden by CSS at any
+	// given viewport and rod's rich click loses on it with "context
+	// deadline exceeded". Use a JS-scoped click via querySelector +
+	// .click(), which fires the React handler regardless of visibility
+	// and picks whichever instance the DOM lists first.
+	dialogClicked, jsErr := b.Page.Eval(`() => {
+		const selectors = [
+			'button[aria-label="Tap to choose a shelf for this book"]',
+			'button[aria-label*="edit shelf choice" i]',
+		];
+		for (const sel of selectors) {
+			const el = document.querySelector(sel);
+			if (el) { el.click(); return sel; }
 		}
-
-		// Now the button should change to the edit-shelf variant, re-find it
-		editBtn, err = b.Page.Timeout(10 * time.Second).Element(
-			`button[aria-label*="Tap to edit shelf"]`,
-		)
-		b.Log.Record("find_edit_button_after_shelve", nil, err)
-		if err != nil {
-			saveDebugArtifacts(b)
-			return fmt.Errorf("book was shelved but edit button did not appear: %w", err)
-		}
+		return '';
+	}`)
+	dialogClickedSel := ""
+	if jsErr == nil && dialogClicked != nil {
+		dialogClickedSel = dialogClicked.Value.Str()
 	}
+	b.Log.Record("click_dialog_opener_js", map[string]any{
+		"matchedSelector": dialogClickedSel,
+		"alreadyShelved":  alreadyShelved,
+	}, jsErr)
 
-	// Click the edit button to open the shelf dialog, then wait for it to render
-	editBtn.MustClick()
-	b.Log.Record("click_shelf_button", map[string]any{"variant": "open_edit_dialog"}, nil)
+	if jsErr != nil || dialogClickedSel == "" {
+		// Fall back to the main button — on already-shelved books that
+		// button itself opens the dialog. On unshelved books it only
+		// shelves as WTR, so this path won't move the book to a non-WTR
+		// shelf, but it keeps the "want-to-read" fast-path working when
+		// Goodreads reshuffles their DOM.
+		b.Log.Record("dialog_opener_fallback", map[string]any{"reason": "chevron not clickable, using main button"}, nil)
+		editBtn.MustClick()
+		b.Log.Record("click_shelf_button", map[string]any{"variant": "open_shelf_dialog_fallback"}, nil)
+	}
 	b.Page.MustWaitStable()
 	time.Sleep(2 * time.Second)
 
