@@ -1,6 +1,7 @@
 # Binaries
 goodreads
 goodreads-cli
+goodreads-local
 goodreads-recorder
 *.exe
 dist/

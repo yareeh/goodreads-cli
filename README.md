@@ -68,6 +68,36 @@ Searches Goodreads and displays results as a table with book IDs, titles, and au
 ./goodreads shelf 55145261 --shelf want-to-read
 ./goodreads shelf 55145261 --shelf currently-reading
 ./goodreads shelf 55145261 --shelf read
+./goodreads shelf 55145261 --shelf ebook
+```
+
+The three reading-status shelves are exclusive. Any other shelf name is
+treated as a non-exclusive custom shelf. A shelf command reports success only
+after it re-lists the target shelf and finds the requested book.
+
+### Use a local checkout for custom-shelf mirroring
+
+Build a distinct binary so testing or Books Registry mirroring never depends
+on, or replaces, a Homebrew installation:
+
+```bash
+cd /Users/flame/src/goodreads-cli
+go build -o ./goodreads-local .
+./goodreads-local shelf <book-id> --shelf ebook
+./goodreads-local list-shelf ebook --json
+```
+
+Use `/Users/flame/src/goodreads-cli/goodreads-local` as the explicit command
+path in the optional Books Registry Goodreads mirror. The registry remains the
+canonical source of truth; a non-zero exit means the mirror write or its
+read-back verification failed.
+
+The local Books Registry accepts this path without changing the Homebrew
+installation:
+
+```bash
+BOOKS_REGISTRY_GOODREADS_CLI=/Users/flame/src/goodreads-cli/goodreads-local \
+  /Users/flame/brain/areas/books/books-registry sync goodreads
 ```
 
 ### Start reading a book
