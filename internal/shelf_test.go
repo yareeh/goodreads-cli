@@ -234,3 +234,45 @@ func TestShelfButtonSelectorsMatchGoodreadsDOM(t *testing.T) {
 		}
 	}
 }
+
+func TestIsExclusiveShelf(t *testing.T) {
+	for _, shelf := range []string{"want-to-read", "currently-reading", "read"} {
+		if !isExclusiveShelf(shelf) {
+			t.Errorf("isExclusiveShelf(%q) = false, want true", shelf)
+		}
+	}
+	for _, shelf := range []string{"ebook", "audiobook", "owned", ""} {
+		if isExclusiveShelf(shelf) {
+			t.Errorf("isExclusiveShelf(%q) = true, want false", shelf)
+		}
+	}
+}
+
+func TestCustomShelfAddJSUsesAuthenticatedShelfEndpoint(t *testing.T) {
+	js := customShelfAddJS(`57"933306`, `ebook"; alert(1); //`)
+	for _, needle := range []string{
+		`/shelf/add_to_shelf`,
+		`authenticity_token`,
+		`X-CSRF-Token`,
+		`credentials: 'same-origin'`,
+		`book_id`,
+		`name`,
+	} {
+		if !strings.Contains(js, needle) {
+			t.Errorf("customShelfAddJS missing %q", needle)
+		}
+	}
+	if strings.Contains(js, `const shelfName = "ebook"; alert(1); //"`) {
+		t.Error("customShelfAddJS interpolated an unescaped shelf name")
+	}
+}
+
+func TestShelfContainsBook(t *testing.T) {
+	books := []Book{{ID: "123"}, {ID: "57933306"}}
+	if !shelfContainsBook(books, "57933306") {
+		t.Error("shelfContainsBook did not find the target")
+	}
+	if shelfContainsBook(books, "999") {
+		t.Error("shelfContainsBook found a missing target")
+	}
+}

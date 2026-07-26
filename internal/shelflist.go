@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -68,15 +69,19 @@ func (c *Client) ListShelf(shelfName string) ([]Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf(
-		"%s/review/list/%s?shelf=%s&per_page=100",
-		BaseURL, userID, shelfName,
-	)
-	html, err := c.fetchHTML(url)
+	html, err := c.fetchHTML(shelfListURL(userID, shelfName))
 	if err != nil {
 		return nil, fmt.Errorf("fetching shelf %q: %w", shelfName, err)
 	}
 	return ParseShelfHTML(html)
+}
+
+func shelfListURL(userID, shelfName string) string {
+	query := url.Values{
+		"per_page": {"100"},
+		"shelf":    {shelfName},
+	}
+	return fmt.Sprintf("%s/review/list/%s?%s", BaseURL, userID, query.Encode())
 }
 
 func (c *Client) fetchUserID() (string, error) {

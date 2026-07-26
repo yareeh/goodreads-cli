@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,6 +14,42 @@ var shelfAriaLabels = map[string]string{
 	"want-to-read":      "Want to Read",
 	"currently-reading": "Currently Reading",
 	"read":              "Read",
+}
+
+func isExclusiveShelf(shelfName string) bool {
+	_, ok := shelfAriaLabels[shelfName]
+	return ok
+}
+
+// customShelfAddJS posts to Goodreads' authenticated Rails shelf helper. The
+// modern React shelf picker only contains the three exclusive reading-status
+// shelves, so non-exclusive custom shelves (for example ebook and audiobook)
+// cannot be selected through that dialog. The CSRF token is read in-page and
+// never crosses into Go logs or command output.
+func customShelfAddJS(bookID, shelfName string) string {
+	return fmt.Sprintf(`async () => {
+		const bookID = %s;
+		const shelfName = %s;
+		const token = document.querySelector('input[name="authenticity_token"]')?.value ||
+			document.querySelector('meta[name="csrf-token"]')?.content || '';
+		if (!token) return {ok: false, status: 0, error: 'CSRF token not found'};
+		const body = new URLSearchParams({
+			authenticity_token: token,
+			book_id: bookID,
+			name: shelfName,
+		});
+		const response = await fetch('/shelf/add_to_shelf', {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+				'X-CSRF-Token': token,
+				'X-Requested-With': 'XMLHttpRequest',
+			},
+			body: body.toString(),
+		});
+		return {ok: response.ok, status: response.status};
+	}`, strconv.Quote(bookID), strconv.Quote(shelfName))
 }
 
 // shelfSelectorFor builds a CSS selector for a shelf option button using
@@ -50,6 +87,19 @@ func shelfClickJS(label string) string {
 
 // AddToShelf navigates to a book page and adds it to the specified shelf.
 func AddToShelf(b *Browser, bookID string, shelfName string) error {
+	if strings.TrimSpace(shelfName) == "" {
+		return fmt.Errorf("shelf name cannot be empty")
+	}
+	if !isExclusiveShelf(shelfName) {
+		if err := addToCustomShelf(b, bookID, shelfName); err != nil {
+			return err
+		}
+		if err := verifyShelfContainsBook(b, shelfName, bookID); err != nil {
+			return err
+		}
+		return b.SaveCookies()
+	}
+
 	url := fmt.Sprintf("https://www.goodreads.com/book/show/%s", bookID)
 	b.Log.Record("navigate", map[string]any{"url": url, "bookID": bookID, "shelf": shelfName}, nil)
 	b.Page.MustNavigate(url)
@@ -155,8 +205,74 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		saveDebugArtifacts(b)
 		return err
 	}
+	if err := verifyShelfContainsBook(b, shelfName, bookID); err != nil {
+		return err
+	}
 
 	return b.SaveCookies()
+}
+
+func addToCustomShelf(b *Browser, bookID, shelfName string) error {
+	url := fmt.Sprintf("https://www.goodreads.com/review/edit/%s", bookID)
+	b.Log.Record("navigate_custom_shelf_form", map[string]any{
+		"url": url, "bookID": bookID, "shelf": shelfName,
+	}, nil)
+	if err := b.Page.Navigate(url); err != nil {
+		return fmt.Errorf("opening custom shelf form: %w", err)
+	}
+	b.Page.MustWaitStable()
+
+	result, err := b.Page.Eval(customShelfAddJS(bookID, shelfName))
+	if err != nil {
+		b.Log.Record("custom_shelf_post", map[string]any{"bookID": bookID, "shelf": shelfName}, err)
+		saveDebugArtifacts(b)
+		return fmt.Errorf("adding book to custom shelf %q: %w", shelfName, err)
+	}
+	ok := result != nil && result.Value.Get("ok").Bool()
+	status := 0
+	errorText := ""
+	if result != nil {
+		status = result.Value.Get("status").Int()
+		errorText = result.Value.Get("error").Str()
+	}
+	b.Log.Record("custom_shelf_post", map[string]any{
+		"bookID": bookID, "shelf": shelfName, "status": status,
+	}, nil)
+	if !ok {
+		saveDebugArtifacts(b)
+		if errorText != "" {
+			return fmt.Errorf("adding book to custom shelf %q: %s", shelfName, errorText)
+		}
+		return fmt.Errorf("adding book to custom shelf %q: Goodreads returned HTTP %d", shelfName, status)
+	}
+	return nil
+}
+
+func verifyShelfContainsBook(b *Browser, shelfName, bookID string) error {
+	books, err := b.ListShelf(shelfName)
+	if err != nil {
+		b.Log.Record("verify_shelf_list", map[string]any{
+			"bookID": bookID, "shelf": shelfName,
+		}, err)
+		return fmt.Errorf("verifying shelf %q by re-listing: %w", shelfName, err)
+	}
+	found := shelfContainsBook(books, bookID)
+	b.Log.Record("verify_shelf_list", map[string]any{
+		"bookID": bookID, "shelf": shelfName, "books": len(books), "found": found,
+	}, nil)
+	if !found {
+		return fmt.Errorf("shelf write could not be verified: book %s was not found on shelf %q after re-listing", bookID, shelfName)
+	}
+	return nil
+}
+
+func shelfContainsBook(books []Book, bookID string) bool {
+	for _, book := range books {
+		if book.ID == bookID {
+			return true
+		}
+	}
+	return false
 }
 
 // derefString returns the value of s, or "" if s is nil. Used only to keep

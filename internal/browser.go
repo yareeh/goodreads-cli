@@ -150,7 +150,7 @@ func (b *Browser) ListShelf(shelfName string) ([]Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100", BaseURL, userID, shelfName)
+	u := shelfListURL(userID, shelfName)
 	html, err := b.FetchRenderedHTML(u)
 	if err != nil {
 		return nil, fmt.Errorf("fetching shelf %q: %w", shelfName, err)

@@ -12,8 +12,13 @@ var shelfName string
 var shelfCmd = &cobra.Command{
 	Use:   "shelf <book-id>",
 	Short: "Add a book to a shelf",
-	Long:  "Add a book to a Goodreads shelf (currently-reading, want-to-read, read)",
-	Args:  cobra.ExactArgs(1),
+	Long: `Add a book to a Goodreads shelf.
+
+The three exclusive reading-status shelves (want-to-read, currently-reading,
+and read) are selected through Goodreads' shelf picker. Other names are
+treated as non-exclusive custom shelves. Every successful write is verified
+by re-listing the target shelf before this command prints Done!.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bookID := args[0]
 
@@ -33,12 +38,12 @@ var shelfCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println("Done!")
+		fmt.Println("Done! Verified by re-listing the target shelf.")
 		return nil
 	},
 }
 
 func init() {
-	shelfCmd.Flags().StringVar(&shelfName, "shelf", "want-to-read", "shelf name (currently-reading, want-to-read, read)")
+	shelfCmd.Flags().StringVar(&shelfName, "shelf", "want-to-read", "exclusive or custom shelf name")
 	rootCmd.AddCommand(shelfCmd)
 }

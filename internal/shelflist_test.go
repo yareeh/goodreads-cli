@@ -137,3 +137,11 @@ func TestIsAWSWAFChallengeBody(t *testing.T) {
 		})
 	}
 }
+
+func TestShelfListURLQueryEscapesCustomShelfName(t *testing.T) {
+	got := shelfListURL("12345", "audio books & essays")
+	want := "https://www.goodreads.com/review/list/12345?per_page=100&shelf=audio+books+%26+essays"
+	if got != want {
+		t.Errorf("shelfListURL = %q, want %q", got, want)
+	}
+}
