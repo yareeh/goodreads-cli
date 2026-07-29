@@ -176,10 +176,11 @@ func TestShelfDialogOpenerSelectorsMatchGoodreadsDOM(t *testing.T) {
 			t.Errorf("shelf.go missing shelf-dialog-opener aria-label %q — Goodreads DOM guard is missing", needle)
 		}
 	}
-	// The new interaction-log kinds that runbooks / bug-report greps rely on.
+	// The interaction-log kinds that runbooks / bug-report greps rely on.
 	for _, kind := range []string{
-		`"click_dialog_opener_js"`,
+		`"click_dialog_opener"`,
 		`"dialog_opener_fallback"`,
+		`"verify_reload"`,
 	} {
 		if !strings.Contains(body, kind) {
 			t.Errorf("shelf.go missing interaction-log kind %s — grep target changed", kind)
