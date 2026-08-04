@@ -177,14 +177,51 @@ func TestShelfDialogOpenerSelectorsMatchGoodreadsDOM(t *testing.T) {
 		}
 	}
 	// The interaction-log kinds that runbooks / bug-report greps rely on.
+	// `dialog_open_retry` is emitted when a chevron click fired but the
+	// target option didn't render in time — key signal for diagnosing the
+	// hydration race that motivates the retry loop (issue #234).
 	for _, kind := range []string{
 		`"click_dialog_opener"`,
 		`"dialog_opener_fallback"`,
+		`"dialog_open_retry"`,
 		`"verify_reload"`,
 	} {
 		if !strings.Contains(body, kind) {
 			t.Errorf("shelf.go missing interaction-log kind %s — grep target changed", kind)
 		}
+	}
+}
+
+// TestOpenDialogAndSelectRetries locks in the retry-loop shape that fixes
+// issue #234. The chevron click is racy against React hydration on the
+// Goodreads book page: on first render the click can land before onClick is
+// attached, silently doing nothing. A single-attempt flow times out looking
+// for shelf options that were never rendered. The fix retries the open
+// while treating "target option visible + clickable" as the ground-truth
+// signal that the dialog actually appeared. Structural test — the browser
+// interaction itself is covered by TestIntegrationMarkCurrentlyReading and
+// TestIntegrationShelfCurrentlyReading in the gated integration suite.
+func TestOpenDialogAndSelectRetries(t *testing.T) {
+	src, err := os.ReadFile("shelf.go")
+	if err != nil {
+		t.Fatalf("read shelf.go: %v", err)
+	}
+	body := string(src)
+
+	if !strings.Contains(body, "func openDialogAndSelect(") {
+		t.Fatalf("openDialogAndSelect helper is missing — retry-based dialog open is the #234 fix")
+	}
+	if !strings.Contains(body, "dialogOpenAttempts = 3") {
+		t.Errorf("expected 3 retry attempts on dialog open; a single try was the #234 regression")
+	}
+	if !strings.Contains(body, "pollAndClickOption(") {
+		t.Errorf("expected pollAndClickOption helper: target-visible poll is the ground truth that the dialog actually rendered")
+	}
+	// Sanity: the option-click must go through the visible-only poller,
+	// not just a bare Element().Click() which would happily click a
+	// still-hidden pre-mounted element.
+	if !strings.Contains(body, "el.Visible()") {
+		t.Errorf("pollAndClickOption must gate on Visible() — pre-mounted-but-hidden dialog markup would otherwise pass")
 	}
 }
 

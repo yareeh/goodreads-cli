@@ -74,75 +74,15 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 		"alreadyShelved": alreadyShelved,
 	}, nil)
 
-	// The BookActions ButtonGroup on the current Goodreads book page is a
-	// pair: the main WTR/edit button plus a chevron dropdown next to it
-	// (aria-label="Tap to choose a shelf for this book" when unshelved,
-	// "Edit shelf choice"-style when shelved) that opens the shelf-picker
-	// dialog. Going through the chevron is a one-click path to the dialog
-	// and works identically whether the book is already shelved or not —
-	// sidestepping the old two-step "click WTR → wait for SPA rerender →
-	// click edit again" flow that flaked in issue #230.
-	//
-	// Both the desktop and mobile layouts render this ButtonGroup, so the
-	// selector matches multiple elements — one is hidden by CSS at any
-	// given viewport. The v1.8.1 attempt used a JS `.click()` to bypass
-	// visibility checks; that turned out to fire without React actually
-	// picking it up on this control, so no dialog opened (see #230's
-	// re-open: chevron event landed but page state never changed). Use
-	// clickFirstVisible: rod native events (dispatched from real mouse
-	// coordinates) on the visible desktop-or-mobile instance, so React
-	// sees the interaction and opens the shelf picker.
-	chevronSelectors := []string{
-		`button[aria-label="Tap to choose a shelf for this book"]`,
-		`button[aria-label*="edit shelf choice" i]`,
-	}
-	dialogOpened, chevErr := clickFirstVisible(b, chevronSelectors, 10*time.Second)
-	b.Log.Record("click_dialog_opener", map[string]any{
-		"clicked":        dialogOpened,
-		"alreadyShelved": alreadyShelved,
-	}, chevErr)
-	if chevErr != nil {
-		// Fall back to the main button. On already-shelved books that
-		// button itself opens the dialog; on unshelved books it only
-		// shelves as WTR (which is still a useful degradation for the
-		// want-to-read fast-path). Same trick as the chevron — click
-		// the visible instance to fire React events reliably.
-		b.Log.Record("dialog_opener_fallback", map[string]any{"reason": "no visible chevron, using main button"}, nil)
-		if _, mainErr := clickFirstVisible(
-			b,
-			[]string{`button[aria-label*="Tap to edit shelf"]`, `button.Button--wtr`},
-			5*time.Second,
-		); mainErr != nil {
-			saveDebugArtifacts(b)
-			return fmt.Errorf("could not click any shelf-opener button: %w", mainErr)
-		}
-	}
-	b.Page.MustWaitStable()
-	time.Sleep(2 * time.Second)
-
 	// Select the target shelf from the dialog.
 	label, ok := shelfAriaLabels[shelfName]
 	if !ok {
 		label = shelfName
 	}
 
-	// Same visibility-safe click for the shelf option inside the dialog.
-	optionSelectors := []string{shelfSelectorFor(label)}
-	if _, err := clickFirstVisible(b, optionSelectors, 10*time.Second); err != nil {
-		// CSS selector didn't hit a visible option — try the broader
-		// JS text-content matcher as a last resort. Note: this
-		// intentionally does NOT match the main page WTR button
-		// (which trapped us in issue #230 re-open), because the JS
-		// selector scopes to elements inside dialogs/menus.
-		res, jsErr := b.Page.Eval(dialogShelfClickJS(label))
-		jsFound := jsErr == nil && res != nil && res.Value.Bool()
-		b.Log.Record("shelf_option_js_fallback", map[string]any{"label": label, "found": jsFound}, jsErr)
-		if !jsFound {
-			saveDebugArtifacts(b)
-			return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
-		}
-	} else {
-		b.Log.Record("click_shelf_option", map[string]any{"label": label}, nil)
+	if err := openDialogAndSelect(b, alreadyShelved, label); err != nil {
+		saveDebugArtifacts(b)
+		return fmt.Errorf("could not find shelf option '%s' in dialog: %w", shelfName, err)
 	}
 	b.Page.MustWaitStable()
 
@@ -164,6 +104,128 @@ func AddToShelf(b *Browser, bookID string, shelfName string) error {
 	}
 
 	return b.SaveCookies()
+}
+
+// openDialogAndSelect opens the shelf-picker dialog and clicks the option whose
+// aria-label equals `targetLabel`. Both steps are wrapped in a retry loop
+// because they are racy against React hydration on the Goodreads book page:
+//
+//   - The chevron button exists in the server-rendered HTML, but its onClick
+//     handler is attached asynchronously by React after hydration. A click
+//     that lands before hydration fires no dialog — no error, no visible
+//     effect — and the caller times out looking for shelf options that never
+//     rendered (issue #234, reproduced with an interaction log showing
+//     click_dialog_opener ok=true followed by shelf_option_js_fallback
+//     found=false 16s later).
+//   - MustWaitStable + a fixed sleep doesn't cover this because the network
+//     goes idle before React finishes attaching handlers.
+//
+// The loop treats "target option visible" as the ground truth that the dialog
+// actually opened, and re-clicks the chevron up to `dialogOpenAttempts` times
+// if it doesn't. Clicking a closed chevron is idempotent (opens the dialog);
+// this loop does NOT re-click a chevron whose dialog is already open, because
+// that would toggle the dialog closed — the poll inside each attempt clicks
+// the target option as soon as it appears, ending the attempt.
+//
+// Falls back to the main WTR/edit button on the FIRST attempt only if the
+// chevron isn't clickable at all (some layouts render only the main button).
+// Falls back to the broad JS text-content matcher as a last resort so a
+// Goodreads DOM shift on the option aria-label doesn't wedge the whole flow.
+func openDialogAndSelect(b *Browser, alreadyShelved bool, targetLabel string) error {
+	chevronSelectors := []string{
+		`button[aria-label="Tap to choose a shelf for this book"]`,
+		`button[aria-label*="edit shelf choice" i]`,
+	}
+	optionSelector := shelfSelectorFor(targetLabel)
+
+	// Give React a moment to hydrate before the first click. On a fresh
+	// page load Goodreads' JS bundle can take a few hundred ms to attach
+	// handlers; a small pre-click wait removes ~half the flake.
+	time.Sleep(500 * time.Millisecond)
+
+	const dialogOpenAttempts = 3
+	const perAttemptOptionWait = 4 * time.Second
+
+	var lastErr error
+	for attempt := 1; attempt <= dialogOpenAttempts; attempt++ {
+		_, chevErr := clickFirstVisible(b, chevronSelectors, 5*time.Second)
+		b.Log.Record("click_dialog_opener", map[string]any{
+			"attempt":        attempt,
+			"alreadyShelved": alreadyShelved,
+		}, chevErr)
+		if chevErr != nil {
+			if attempt == 1 {
+				b.Log.Record("dialog_opener_fallback", map[string]any{
+					"reason": "no visible chevron, using main button",
+				}, nil)
+				if _, mainErr := clickFirstVisible(
+					b,
+					[]string{`button[aria-label*="Tap to edit shelf"]`, `button.Button--wtr`},
+					5*time.Second,
+				); mainErr != nil {
+					return fmt.Errorf("could not click any shelf-opener button: %w", mainErr)
+				}
+			} else {
+				lastErr = chevErr
+				continue
+			}
+		}
+
+		// Poll for the target option to actually render — its presence
+		// proves the dialog opened. If it doesn't appear within
+		// perAttemptOptionWait, the click didn't take effect; retry.
+		if clicked := pollAndClickOption(b, optionSelector, perAttemptOptionWait); clicked {
+			b.Log.Record("click_shelf_option", map[string]any{
+				"label": targetLabel, "attempt": attempt,
+			}, nil)
+			return nil
+		}
+		b.Log.Record("dialog_open_retry", map[string]any{
+			"attempt": attempt,
+			"reason":  "target option did not appear",
+		}, nil)
+		lastErr = fmt.Errorf("dialog option %q did not appear after chevron click", targetLabel)
+	}
+
+	// Last resort: broad JS text-content matcher scoped to dialog/menu.
+	// Same guard as before — we do NOT let this hit the main page WTR
+	// button (issue #230 re-open).
+	res, jsErr := b.Page.Eval(dialogShelfClickJS(targetLabel))
+	jsFound := jsErr == nil && res != nil && res.Value.Bool()
+	b.Log.Record("shelf_option_js_fallback", map[string]any{
+		"label": targetLabel, "found": jsFound,
+	}, jsErr)
+	if jsFound {
+		return nil
+	}
+	return lastErr
+}
+
+// pollAndClickOption polls the page for a visible element matching
+// `selector` and clicks the first one it finds within `timeout`. Returns
+// true if a click was dispatched successfully. Used by openDialogAndSelect
+// to detect that the shelf dialog actually rendered — a straight
+// b.Page.Timeout(...).Element() would wait for the element in the DOM
+// but not verify it's visible/interactable, which matters here because
+// the dialog markup can be pre-mounted but hidden.
+func pollAndClickOption(b *Browser, selector string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		elems, err := b.Page.Elements(selector)
+		if err == nil {
+			for _, el := range elems {
+				visible, verr := el.Visible()
+				if verr != nil || !visible {
+					continue
+				}
+				if clickErr := el.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+					return true
+				}
+			}
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	return false
 }
 
 // clickFirstVisible finds elements matching any of the given selectors,
