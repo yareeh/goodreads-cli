@@ -107,4 +107,3 @@ func saveDebugArtifacts(b *Browser) {
 		fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", logPath, err)
 	}
 }
-
