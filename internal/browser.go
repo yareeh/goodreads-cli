@@ -34,7 +34,7 @@ type Browser struct {
 // overrides the path; a path that does not exist is ignored.
 func resolveBrowserBin() string {
 	if p := os.Getenv("GOODREADS_BROWSER_BIN"); p != "" {
-		if _, err := os.Stat(p); err == nil {
+		if _, err := os.Stat(p); err == nil { // #nosec G703 -- the path is the operator's own opt-in override; it is only stat-ed and handed to the launcher
 			return p
 		}
 	}
