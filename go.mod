@@ -1,6 +1,6 @@
 module github.com/yareeh/goodreads-cli
 
-go 1.26.8
+go 1.26.10
 
 retract v1.0.0 // Module path was incorrect (github.com/jari/ instead of github.com/yareeh/)
 
