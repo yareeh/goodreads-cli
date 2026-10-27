@@ -22,6 +22,29 @@ type Browser struct {
 	Log  *InteractionLog
 }
 
+// resolveBrowserBin returns the Chromium to launch, or "" to let rod pick
+// (and download) one.
+//
+// Left alone, rod validates its cached browser on EVERY launch by running
+// `chrome --headless --dump-dom about:blank` with no timeout. That child
+// occasionally never exits, which hangs goodreads-cli for good (callers saw
+// 120 s timeouts with the stuck chrome still alive minutes later); a failed
+// validation would also wipe the cache and re-download the browser. Handing
+// rod an existing binary path skips the validation. GOODREADS_BROWSER_BIN
+// overrides the path; a path that does not exist is ignored.
+func resolveBrowserBin() string {
+	if p := os.Getenv("GOODREADS_BROWSER_BIN"); p != "" {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	p := launcher.NewBrowser().BinPath()
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return ""
+}
+
 // NewBrowser launches a Chrome instance and navigates to goodreads.com.
 // Set headless to false to see the browser for debugging.
 //
@@ -36,6 +59,9 @@ type Browser struct {
 func NewBrowser(headless bool) (*Browser, error) {
 	l := launcher.New().
 		Headless(headless)
+	if bin := resolveBrowserBin(); bin != "" {
+		l = l.Bin(bin)
+	}
 	if os.Getenv("GOODREADS_BROWSER_SANDBOX") != "1" {
 		l = l.NoSandbox(true)
 	}
