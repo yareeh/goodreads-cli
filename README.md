@@ -86,6 +86,14 @@ Shortcut for adding a book to the `currently-reading` shelf.
 
 Shortcut for adding a book to the `read` shelf.
 
+### Remove a book from your shelves
+
+```
+./goodreads remove 55145261
+```
+
+Takes the book off every shelf. This also clears its rating, review and reading activity on Goodreads. A book that is on no shelf is left alone.
+
 ### Reply to a discussion topic
 
 ```

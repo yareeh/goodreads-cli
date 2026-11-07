@@ -372,6 +372,34 @@ func TestIntegrationShelfAddAndRemove(t *testing.T) {
 	t.Log("Moved book to read shelf")
 }
 
+// TestIntegrationRemoveFromShelf shelves the test book, removes it from every
+// shelf (confirming Goodreads' "Are you sure" dialog) and checks that removing
+// it again is a harmless no-op.
+func TestIntegrationRemoveFromShelf(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
+
+	if err := internal.AddToShelf(browser, testShelfBookID, "want-to-read"); err != nil {
+		t.Fatalf("AddToShelf(want-to-read): %v", err)
+	}
+	removed, err := internal.RemoveFromShelf(browser, testShelfBookID)
+	if err != nil {
+		t.Fatalf("RemoveFromShelf: %v", err)
+	}
+	if !removed {
+		t.Error("expected the shelved book to be removed")
+	}
+	removed, err = internal.RemoveFromShelf(browser, testShelfBookID)
+	if err != nil {
+		t.Fatalf("RemoveFromShelf on an unshelved book: %v", err)
+	}
+	if removed {
+		t.Error("expected nothing to remove the second time")
+	}
+}
+
 func TestIntegrationMarkCurrentlyReading(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
