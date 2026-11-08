@@ -72,6 +72,14 @@ Shortcut for `shelf <book-id> --shelf currently-reading`. Works on both unshelve
 
 Shortcut for `shelf <book-id> --shelf read`.
 
+### Remove a book from your shelves
+
+```bash
+./goodreads remove <book-id>
+```
+
+Takes the book off all shelves ("Remove from my shelf" + the confirmation). Goodreads clears the book's rating, review and reading activity with it. A book on no shelf is left alone (exit 0). Fails if the book is still shelved afterwards.
+
 ### Reply to a discussion topic
 
 ```bash
