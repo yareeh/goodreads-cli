@@ -98,27 +98,34 @@ func confirmRemove(b *Browser, timeout time.Duration) bool {
 	return false
 }
 
-// verifyRemoved reloads the book page and waits for its main button to offer
-// "Tap to shelve book ...", i.e. the book is on no shelf. Polls for up to 10 s.
+// removeVerifyTimeout bounds verifyRemoved. Goodreads sometimes lags: the
+// confirmed removal went through, yet reloads kept showing the book shelved
+// for over 10 s (seen in integration runs during a bot-check period).
+var removeVerifyTimeout = 30 * time.Second
+
+// verifyRemoved waits for the book page's main button to offer "Tap to shelve
+// book ...", i.e. the book is on no shelf. Every poll reloads the page: the
+// shelf state comes from the server, so re-reading an already loaded page can
+// never see the change.
 func verifyRemoved(b *Browser, url string) error {
-	b.Page.MustNavigate(url)
-	b.Page.MustWaitStable()
-	deadline := time.Now().Add(10 * time.Second)
 	last := ""
-	for {
-		if el, err := b.Page.Timeout(2 * time.Second).Element(`button[aria-label*="Tap to edit shelf"], button[aria-label*="Tap to shelve book"]`); err == nil {
-			if al, _ := el.Attribute("aria-label"); al != nil {
-				last = *al
-				b.Log.Record("verify_removed_poll", map[string]any{"ariaLabel": last}, nil)
-				if !isShelvedLabel(last) {
-					return nil
-				}
-			}
+	removed := waitUntil(func() bool {
+		b.Page.MustNavigate(url)
+		b.Page.MustWaitStable()
+		el, err := b.Page.Timeout(5 * time.Second).Element(`button[aria-label*="Tap to edit shelf"], button[aria-label*="Tap to shelve book"]`)
+		if err != nil {
+			return false
 		}
-		if time.Now().After(deadline) {
-			break
+		al, _ := el.Attribute("aria-label")
+		if al == nil {
+			return false
 		}
-		time.Sleep(1 * time.Second)
+		last = *al
+		b.Log.Record("verify_removed_poll", map[string]any{"ariaLabel": last}, nil)
+		return !isShelvedLabel(last)
+	}, removeVerifyTimeout, 3*time.Second)
+	if removed {
+		return nil
 	}
-	return fmt.Errorf("book is still shelved after removing it (button: %q)", last)
+	return fmt.Errorf("book is still shelved %s after removing it (button: %q)", removeVerifyTimeout, last)
 }
