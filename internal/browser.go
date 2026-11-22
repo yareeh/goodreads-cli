@@ -20,6 +20,9 @@ type Browser struct {
 	Rod  *rod.Browser
 	Page *rod.Page
 	Log  *InteractionLog
+	// Headless is false when a human can see the window (--no-headless);
+	// Login then waits for them to solve a CAPTCHA.
+	Headless bool
 }
 
 // resolveBrowserBin returns the Chromium to launch, or "" to let rod pick
@@ -82,7 +85,7 @@ func NewBrowser(headless bool) (*Browser, error) {
 	}
 	page.MustWaitStable()
 
-	b := &Browser{Rod: browser, Page: page, Log: NewInteractionLog()}
+	b := &Browser{Rod: browser, Page: page, Log: NewInteractionLog(), Headless: headless}
 	b.Log.Record("browser_launch", map[string]any{"headless": headless}, nil)
 
 	if err := b.LoadCookies(); err == nil {

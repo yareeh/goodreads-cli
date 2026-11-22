@@ -14,7 +14,67 @@ import (
 // Cloudflare challenge whose splash holds the SSO buttons off-DOM until it
 // clears. A 10s timeout (the original value) flaked frequently on consecutive
 // test runs.
+//
+// In a headed browser (--no-headless) a CAPTCHA or 2FA prompt can interrupt
+// the automatic form fill. Login then hands over to the human: it waits up to
+// ManualLoginTimeout for a logged-in page instead of failing after 3 seconds.
 func Login(b *Browser, cfg *Config) error {
+	fillErr := fillLoginForm(b, cfg)
+
+	if b.Headless {
+		if fillErr != nil {
+			return fillErr
+		}
+		// Wait for redirect back to Goodreads
+		b.Page.MustWaitStable()
+		time.Sleep(3 * time.Second)
+		if !b.IsLoggedIn() {
+			saveDebugArtifacts(b)
+			return fmt.Errorf("login failed — check your credentials in %s, or run with --no-headless to check for CAPTCHA/2FA", ConfigPath())
+		}
+		return b.SaveCookies()
+	}
+
+	if !b.IsLoggedIn() {
+		fmt.Fprintf(os.Stderr, "Finish logging in in the browser window (solve any CAPTCHA/2FA). Waiting up to %s...\n", ManualLoginTimeout)
+		if !waitUntil(b.IsLoggedIn, ManualLoginTimeout, 2*time.Second) {
+			saveDebugArtifacts(b)
+			if fillErr != nil {
+				return fmt.Errorf("timed out waiting for manual login (automatic fill failed: %v)", fillErr)
+			}
+			return fmt.Errorf("timed out waiting for manual login after %s", ManualLoginTimeout)
+		}
+	}
+	return b.SaveCookies()
+}
+
+// ManualLoginTimeout is how long a headed Login waits for the human to finish.
+var ManualLoginTimeout = 5 * time.Minute
+
+// waitUntil polls check every interval until it returns true (→ true) or
+// timeout passes (→ false).
+func waitUntil(check func() bool, timeout, interval time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if check() {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(interval)
+	}
+}
+
+// fillLoginForm navigates to the sign-in page and submits the credentials.
+// rod's Must* helpers panic on page errors; those come back as an error.
+func fillLoginForm(b *Browser, cfg *Config) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("login form: %v", r)
+		}
+	}()
+
 	// Navigate to Goodreads sign-in
 	signInURL := "https://www.goodreads.com/user/sign_in"
 	b.Log.Record("navigate", map[string]any{"url": signInURL, "purpose": "login"}, nil)
@@ -54,18 +114,7 @@ func Login(b *Browser, cfg *Config) error {
 		return fmt.Errorf("could not find submit button: %w", err)
 	}
 	submitBtn.MustClick()
-
-	// Wait for redirect back to Goodreads
-	b.Page.MustWaitStable()
-	time.Sleep(3 * time.Second)
-
-	// Verify login succeeded
-	if !b.IsLoggedIn() {
-		saveDebugArtifacts(b)
-		return fmt.Errorf("login failed — check your credentials in %s, or run with --no-headless to check for CAPTCHA/2FA", ConfigPath())
-	}
-
-	return b.SaveCookies()
+	return nil
 }
 
 // saveDebugArtifacts writes as much of the failure context to disk as it
