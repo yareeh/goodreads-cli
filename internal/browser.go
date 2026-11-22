@@ -176,12 +176,13 @@ func (b *Browser) ListShelf(shelfName string) ([]Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100", BaseURL, userID, shelfName)
-	html, err := b.FetchRenderedHTML(u)
-	if err != nil {
-		return nil, fmt.Errorf("fetching shelf %q: %w", shelfName, err)
-	}
-	return ParseShelfHTML(html)
+	return collectShelfPages(func(page int) (string, error) {
+		html, err := b.FetchRenderedHTML(shelfURL(userID, shelfName, page))
+		if err != nil {
+			return "", fmt.Errorf("fetching shelf %q page %d: %w", shelfName, page, err)
+		}
+		return html, nil
+	})
 }
 
 // IsLoggedIn checks if the user is logged in by looking for user-specific elements.
