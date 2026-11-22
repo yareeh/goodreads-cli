@@ -54,7 +54,10 @@ ID           TITLE                                              AUTHOR
 ./goodreads shelf <book-id> --shelf <shelf-name>
 ```
 
-Shelf names: `want-to-read`, `currently-reading`, `read`
+The reading-status shelves are `want-to-read`, `currently-reading`, and
+`read`. Other names select one of the user's own shelves, such as `ebook` or
+`audiobook`; a shelf the user doesn't have is an error (it is never created).
+The command only succeeds once the book is listed on the target shelf.
 
 ### Mark a book as currently reading
 

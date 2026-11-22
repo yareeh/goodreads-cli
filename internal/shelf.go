@@ -50,8 +50,22 @@ func shelfClickJS(label string) string {
 	}`, label)
 }
 
-// AddToShelf navigates to a book page and adds it to the specified shelf.
+// AddToShelf adds a book to a shelf. The reading-status shelves
+// (want-to-read, currently-reading, read) go through the book page's shelf
+// dialog; any other name must be one of the user's own shelves and goes
+// through addToCustomShelf.
 func AddToShelf(b *Browser, bookID string, shelfName string) error {
+	shelfName = strings.TrimSpace(shelfName)
+	if shelfName == "" {
+		return fmt.Errorf("shelf name cannot be empty")
+	}
+	if !isBuiltinShelf(shelfName) {
+		if err := addToCustomShelf(b, bookID, shelfName); err != nil {
+			return err
+		}
+		return b.SaveCookies()
+	}
+
 	url := fmt.Sprintf("https://www.goodreads.com/book/show/%s", bookID)
 	b.Log.Record("navigate", map[string]any{"url": url, "bookID": bookID, "shelf": shelfName}, nil)
 	b.Page.MustNavigate(url)

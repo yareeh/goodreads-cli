@@ -205,3 +205,21 @@ func TestShelfURL_HasPage(t *testing.T) {
 		t.Errorf("got %s want %s", got, want)
 	}
 }
+
+func TestShelfURL_EscapesShelfName(t *testing.T) {
+	got := shelfURL("42", "audio books & essays", 1)
+	want := BaseURL + "/review/list/42?shelf=audio+books+%26+essays&per_page=100&page=1"
+	if got != want {
+		t.Errorf("got %s want %s", got, want)
+	}
+}
+
+// Goodreads' slug for the Want to Read shelf is "to-read"; the CLI name
+// "want-to-read" must list that shelf.
+func TestShelfURL_WantToReadUsesGoodreadsSlug(t *testing.T) {
+	got := shelfURL("42", "want-to-read", 1)
+	want := BaseURL + "/review/list/42?shelf=to-read&per_page=100&page=1"
+	if got != want {
+		t.Errorf("got %s want %s", got, want)
+	}
+}

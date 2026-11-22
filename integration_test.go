@@ -296,6 +296,10 @@ func setupBrowserWithLogin(t *testing.T) *internal.Browser {
 		if err := browser.LoadCookies(); err != nil {
 			t.Fatalf("LoadCookies: %v", err)
 		}
+		// IsLoggedIn inspects the current page, so load one that the new
+		// cookies apply to (as the disk-cookie branch below does).
+		browser.Page.MustNavigate("https://www.goodreads.com")
+		browser.Page.MustWaitStable()
 		if browser.IsLoggedIn() {
 			return browser
 		}
@@ -410,6 +414,53 @@ func TestIntegrationRemoveFromShelf(t *testing.T) {
 	if removed {
 		t.Error("expected nothing to remove the second time")
 	}
+}
+
+// TestIntegrationCustomShelf adds the test book to one of the account's own
+// shelves (did-not-finish, an exclusive user shelf the dialog can't offer),
+// checks that an unknown shelf name is refused rather than created, and that
+// "want-to-read" lists Goodreads' to-read shelf.
+func TestIntegrationCustomShelf(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	browser := setupBrowserWithLogin(t)
+
+	if err := internal.AddToShelf(browser, testShelfBookID, "did-not-finish"); err != nil {
+		t.Fatalf("AddToShelf(did-not-finish): %v", err)
+	}
+	books, err := browser.ListShelf("did-not-finish")
+	if err != nil {
+		t.Fatalf("ListShelf(did-not-finish): %v", err)
+	}
+	if !hasBook(books, testShelfBookID) {
+		t.Errorf("book %s not on did-not-finish after AddToShelf", testShelfBookID)
+	}
+
+	err = internal.AddToShelf(browser, testShelfBookID, "no-such-shelf-xyz")
+	if err == nil || !strings.Contains(err.Error(), "no shelf named") {
+		t.Errorf("AddToShelf(unknown shelf) = %v, want a 'no shelf named' error", err)
+	}
+
+	if err := internal.AddToShelf(browser, testShelfBookID, "want-to-read"); err != nil {
+		t.Fatalf("AddToShelf(want-to-read): %v", err)
+	}
+	books, err = browser.ListShelf("want-to-read")
+	if err != nil {
+		t.Fatalf("ListShelf(want-to-read): %v", err)
+	}
+	if !hasBook(books, testShelfBookID) {
+		t.Errorf("book %s not listed on want-to-read", testShelfBookID)
+	}
+}
+
+func hasBook(books []internal.Book, id string) bool {
+	for _, b := range books {
+		if b.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func TestIntegrationMarkCurrentlyReading(t *testing.T) {

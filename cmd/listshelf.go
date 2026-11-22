@@ -22,6 +22,7 @@ the signed-in home page, fetches the shelf, and prints the books on it.
 Examples:
   goodreads list-shelf currently-reading
   goodreads list-shelf currently-reading --json
+  goodreads list-shelf ebook --json
   goodreads list-shelf want-to-read
   goodreads list-shelf read`,
 	Aliases: []string{"shelf-list", "shelved"},
