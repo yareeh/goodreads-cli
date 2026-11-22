@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -77,9 +78,17 @@ func (c *Client) ListShelf(shelfName string) ([]Book, error) {
 	})
 }
 
-// shelfURL is the address of one page (1-based, 100 books) of a shelf.
+// shelfSlugs maps CLI shelf names to Goodreads' URL slug where they differ.
+var shelfSlugs = map[string]string{"want-to-read": "to-read"}
+
+// shelfURL is the address of one page (1-based, 100 books) of a shelf. The
+// shelf name is query-escaped: custom shelves can contain spaces or "&".
 func shelfURL(userID, shelfName string, page int) string {
-	return fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100&page=%d", BaseURL, userID, shelfName, page)
+	if slug, ok := shelfSlugs[shelfName]; ok {
+		shelfName = slug
+	}
+	return fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100&page=%d",
+		BaseURL, userID, url.QueryEscape(shelfName), page)
 }
 
 // maxShelfPages is a safety stop: 100 books a page, so 10,000 books.

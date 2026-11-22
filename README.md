@@ -68,7 +68,16 @@ Searches Goodreads and displays results as a table with book IDs, titles, and au
 ./goodreads shelf 55145261 --shelf want-to-read
 ./goodreads shelf 55145261 --shelf currently-reading
 ./goodreads shelf 55145261 --shelf read
+./goodreads shelf 55145261 --shelf ebook
 ```
+
+```
+
+`want-to-read`, `currently-reading` and `read` are the reading-status
+shelves. Any other name must be one of your own Goodreads shelves (matched
+case-insensitively); a name you don't have is an error, so a typo never
+creates a new shelf. Create new shelves on Goodreads first. The command
+succeeds only once the book is listed on the target shelf.
 
 ### Start reading a book
 

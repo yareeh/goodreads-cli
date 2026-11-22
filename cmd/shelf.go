@@ -12,8 +12,14 @@ var shelfName string
 var shelfCmd = &cobra.Command{
 	Use:   "shelf <book-id>",
 	Short: "Add a book to a shelf",
-	Long:  "Add a book to a Goodreads shelf (currently-reading, want-to-read, read)",
-	Args:  cobra.ExactArgs(1),
+	Long: `Add a book to a Goodreads shelf.
+
+The reading-status shelves (want-to-read, currently-reading, read) are
+chosen in the book page's shelf dialog. Any other name must be one of your
+own shelves, such as ebook or audiobook (matched case-insensitively); a name
+you don't have is an error, never a new shelf. The command fails unless the
+book is on the shelf afterwards.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bookID := args[0]
 
@@ -39,6 +45,6 @@ var shelfCmd = &cobra.Command{
 }
 
 func init() {
-	shelfCmd.Flags().StringVar(&shelfName, "shelf", "want-to-read", "shelf name (currently-reading, want-to-read, read)")
+	shelfCmd.Flags().StringVar(&shelfName, "shelf", "want-to-read", "want-to-read, currently-reading, read, or one of your own shelves")
 	rootCmd.AddCommand(shelfCmd)
 }
