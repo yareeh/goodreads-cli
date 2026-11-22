@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"os"
 	"testing"
 )
@@ -135,5 +136,72 @@ func TestIsAWSWAFChallengeBody(t *testing.T) {
 				t.Errorf("isAWSWAFChallengeBody(...) = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func shelfRow(id string) string {
+	return `<tr id="review_` + id + `" class="bookalike review"><td class="field title"><a title="T` + id +
+		`" href="/book/show/` + id + `"></a></td><td class="field author"><a href="/author/show/1">A</a></td>` +
+		`<div data-resource-id="` + id + `"></div></tr>`
+}
+
+func TestCollectShelfPages_FollowsPagesUntilEmpty(t *testing.T) {
+	pages := map[int]string{
+		1: shelfRow("1") + shelfRow("2"),
+		2: shelfRow("3") + shelfRow("4"),
+		3: shelfRow("5"),
+	}
+	var asked []int
+	books, err := collectShelfPages(func(page int) (string, error) {
+		asked = append(asked, page)
+		return pages[page], nil // page 4 is empty
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(books) != 5 {
+		t.Fatalf("got %d books, want 5", len(books))
+	}
+	if books[0].ID != "1" || books[4].ID != "5" {
+		t.Errorf("order wrong: %v", books)
+	}
+	if len(asked) != 4 {
+		t.Errorf("asked pages %v, want 1..4", asked)
+	}
+}
+
+func TestCollectShelfPages_StopsWhenPageRepeats(t *testing.T) {
+	// Goodreads serves the last page again for an out-of-range page number.
+	books, err := collectShelfPages(func(page int) (string, error) {
+		if page == 1 {
+			return shelfRow("1") + shelfRow("2"), nil
+		}
+		return shelfRow("2"), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(books) != 2 {
+		t.Fatalf("got %d books, want 2 (no duplicates)", len(books))
+	}
+}
+
+func TestCollectShelfPages_ErrorOnLaterPageIsReturned(t *testing.T) {
+	_, err := collectShelfPages(func(page int) (string, error) {
+		if page == 2 {
+			return "", errors.New("boom")
+		}
+		return shelfRow("1"), nil
+	})
+	if err == nil {
+		t.Fatal("want error, a truncated shelf must not look complete")
+	}
+}
+
+func TestShelfURL_HasPage(t *testing.T) {
+	got := shelfURL("42", "read", 3)
+	want := BaseURL + "/review/list/42?shelf=read&per_page=100&page=3"
+	if got != want {
+		t.Errorf("got %s want %s", got, want)
 	}
 }

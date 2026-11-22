@@ -24,6 +24,28 @@ GOODREADS_PASSWORD or use .env):
 go test -tags integration ./...
 ```
 
+If logins fail with "login failed" and the debug HTML shows an Amazon
+CAPTCHA (`amzn-captcha-root`), the account is being bot-checked. Run a headed
+login from the repo root, solve the CAPTCHA in the window, and the tests will
+reuse the saved session. Tests and this helper use their own session store,
+`./.goodreads-cli-session` (gitignored, via `GOODREADS_SESSION_PATH`), never
+the CLI's `~/.goodreads-cli-session`:
+
+```
+go run ./cmd/headed-login
+```
+
+Static checks (everything CI's `test` job scans: pre-commit hooks, gofmt,
+vet, gitleaks on unpushed commits, `go mod verify`, gosec, govulncheck — with
+go.mod's Go toolchain, as CI uses):
+
+```
+make static
+```
+
+A pre-push hook runs `make static` automatically. Install it once per clone
+or host with `make hooks` (or `scripts/install-hooks.sh`).
+
 **The gated suite must be run and green before any `git push origin`.**
 The build tag exists to keep iteration fast, not to let slow tests rot.
 

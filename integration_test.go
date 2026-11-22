@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,10 +32,26 @@ import (
 // TestMain loads a .env file (if present) before running any tests, so
 // credentials can be stored locally in .env rather than exported in the shell.
 // In CI, standard GitHub Actions secrets set the same env vars.
+//
+// It also points the session store at a gitignored file in the repo, so the
+// test account's cookies never overwrite (or Logout() delete) the user's real
+// ~/.goodreads-cli-session. cmd/headed-login writes the same file.
 func TestMain(m *testing.M) {
 	loadDotEnv(".env")
+	if os.Getenv("GOODREADS_SESSION_PATH") == "" {
+		p, err := filepath.Abs(testSessionFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "resolve test session path: %v\n", err)
+			os.Exit(1)
+		}
+		os.Setenv("GOODREADS_SESSION_PATH", p)
+	}
 	os.Exit(m.Run())
 }
+
+// testSessionFile is the integration tests' session store, relative to the
+// repo root (gitignored via .goodreads-cli-session).
+const testSessionFile = ".goodreads-cli-session"
 
 // loadDotEnv reads KEY=VALUE pairs from path and sets them as env vars.
 // Lines starting with # and empty lines are ignored. Existing env vars win.
@@ -231,10 +248,7 @@ func TestIntegrationLogout(t *testing.T) {
 	}
 
 	// Create a temp session file
-	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
+	t.Setenv("GOODREADS_SESSION_PATH", filepath.Join(t.TempDir(), "session"))
 
 	sessionPath := internal.SessionPath()
 	os.WriteFile(sessionPath, []byte("fake-cookies"), 0600)
@@ -272,14 +286,12 @@ func setupBrowserWithLogin(t *testing.T) *internal.Browser {
 
 	// Try loading existing cookies from env var
 	if cookies != "" {
-		tmpDir := t.TempDir()
 		data, err := base64.StdEncoding.DecodeString(cookies)
 		if err != nil {
 			t.Fatalf("decoding session cookies: %v", err)
 		}
-		origHome := os.Getenv("HOME")
-		os.Setenv("HOME", tmpDir)
-		t.Cleanup(func() { os.Setenv("HOME", origHome) })
+		testStore := os.Getenv("GOODREADS_SESSION_PATH")
+		t.Setenv("GOODREADS_SESSION_PATH", filepath.Join(t.TempDir(), "session"))
 		os.WriteFile(internal.SessionPath(), data, 0600)
 		if err := browser.LoadCookies(); err != nil {
 			t.Fatalf("LoadCookies: %v", err)
@@ -288,7 +300,7 @@ func setupBrowserWithLogin(t *testing.T) *internal.Browser {
 			return browser
 		}
 		t.Log("Stored cookies expired, falling back to login")
-		os.Setenv("HOME", origHome)
+		os.Setenv("GOODREADS_SESSION_PATH", testStore)
 	}
 
 	// Try loading cookies saved to disk by a prior test (e.g. TestIntegrationLogin)

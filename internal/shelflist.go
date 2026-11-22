@@ -68,15 +68,54 @@ func (c *Client) ListShelf(shelfName string) ([]Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf(
-		"%s/review/list/%s?shelf=%s&per_page=100",
-		BaseURL, userID, shelfName,
-	)
-	html, err := c.fetchHTML(url)
-	if err != nil {
-		return nil, fmt.Errorf("fetching shelf %q: %w", shelfName, err)
+	return collectShelfPages(func(page int) (string, error) {
+		html, err := c.fetchHTML(shelfURL(userID, shelfName, page))
+		if err != nil {
+			return "", fmt.Errorf("fetching shelf %q page %d: %w", shelfName, page, err)
+		}
+		return html, nil
+	})
+}
+
+// shelfURL is the address of one page (1-based, 100 books) of a shelf.
+func shelfURL(userID, shelfName string, page int) string {
+	return fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100&page=%d", BaseURL, userID, shelfName, page)
+}
+
+// maxShelfPages is a safety stop: 100 books a page, so 10,000 books.
+const maxShelfPages = 100
+
+// collectShelfPages reads shelf pages 1, 2, 3 … through fetch and returns all
+// the books, in order. It stops at the first page with no new books: an empty
+// page, or a repeat of earlier ones (Goodreads serves the last page again for
+// a page number past the end). An error on any page is returned as an error
+// rather than a silently truncated shelf.
+func collectShelfPages(fetch func(page int) (string, error)) ([]Book, error) {
+	all := []Book{}
+	seen := map[string]bool{}
+	for page := 1; page <= maxShelfPages; page++ {
+		html, err := fetch(page)
+		if err != nil {
+			return nil, err
+		}
+		books, err := ParseShelfHTML(html)
+		if err != nil {
+			return nil, err
+		}
+		added := 0
+		for _, b := range books {
+			if seen[b.ID] {
+				continue
+			}
+			seen[b.ID] = true
+			all = append(all, b)
+			added++
+		}
+		if added == 0 {
+			break
+		}
 	}
-	return ParseShelfHTML(html)
+	return all, nil
 }
 
 func (c *Client) fetchUserID() (string, error) {

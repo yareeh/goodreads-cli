@@ -20,6 +20,9 @@ type Browser struct {
 	Rod  *rod.Browser
 	Page *rod.Page
 	Log  *InteractionLog
+	// Headless is false when a human can see the window (--no-headless);
+	// Login then waits for them to solve a CAPTCHA.
+	Headless bool
 }
 
 // resolveBrowserBin returns the Chromium to launch, or "" to let rod pick
@@ -82,7 +85,7 @@ func NewBrowser(headless bool) (*Browser, error) {
 	}
 	page.MustWaitStable()
 
-	b := &Browser{Rod: browser, Page: page, Log: NewInteractionLog()}
+	b := &Browser{Rod: browser, Page: page, Log: NewInteractionLog(), Headless: headless}
 	b.Log.Record("browser_launch", map[string]any{"headless": headless}, nil)
 
 	if err := b.LoadCookies(); err == nil {
@@ -176,12 +179,13 @@ func (b *Browser) ListShelf(shelfName string) ([]Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("%s/review/list/%s?shelf=%s&per_page=100", BaseURL, userID, shelfName)
-	html, err := b.FetchRenderedHTML(u)
-	if err != nil {
-		return nil, fmt.Errorf("fetching shelf %q: %w", shelfName, err)
-	}
-	return ParseShelfHTML(html)
+	return collectShelfPages(func(page int) (string, error) {
+		html, err := b.FetchRenderedHTML(shelfURL(userID, shelfName, page))
+		if err != nil {
+			return "", fmt.Errorf("fetching shelf %q page %d: %w", shelfName, page, err)
+		}
+		return html, nil
+	})
 }
 
 // IsLoggedIn checks if the user is logged in by looking for user-specific elements.

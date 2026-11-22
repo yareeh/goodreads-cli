@@ -18,7 +18,13 @@ func ConfigPath() string {
 	return filepath.Join(home, ".goodreads-cli.yaml")
 }
 
+// SessionPath is where browser session cookies are stored. GOODREADS_SESSION_PATH
+// overrides the default ~/.goodreads-cli-session; the integration tests and
+// cmd/headed-login use it so the test account never touches the user's session.
 func SessionPath() string {
+	if p := os.Getenv("GOODREADS_SESSION_PATH"); p != "" {
+		return p
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".goodreads-cli-session")
 }

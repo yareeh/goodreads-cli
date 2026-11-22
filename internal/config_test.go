@@ -16,7 +16,16 @@ func TestConfigPath(t *testing.T) {
 	}
 }
 
+func TestSessionPathEnvOverride(t *testing.T) {
+	want := filepath.Join(t.TempDir(), "test-session")
+	t.Setenv("GOODREADS_SESSION_PATH", want)
+	if got := SessionPath(); got != want {
+		t.Errorf("SessionPath() = %q, want %q", got, want)
+	}
+}
+
 func TestSessionPath(t *testing.T) {
+	t.Setenv("GOODREADS_SESSION_PATH", "")
 	p := SessionPath()
 	if p == "" {
 		t.Fatal("SessionPath() returned empty string")
