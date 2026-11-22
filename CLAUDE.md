@@ -35,6 +35,17 @@ the CLI's `~/.goodreads-cli-session`:
 go run ./cmd/headed-login
 ```
 
+Static checks (everything CI's `test` job scans: pre-commit hooks, gofmt,
+vet, gitleaks on unpushed commits, `go mod verify`, gosec, govulncheck — with
+go.mod's Go toolchain, as CI uses):
+
+```
+make static
+```
+
+A pre-push hook runs `make static` automatically. Install it once per clone
+or host with `make hooks` (or `scripts/install-hooks.sh`).
+
 **The gated suite must be run and green before any `git push origin`.**
 The build tag exists to keep iteration fast, not to let slow tests rot.
 
