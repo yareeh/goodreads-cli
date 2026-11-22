@@ -36,7 +36,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, "resolve session path:", err)
 			os.Exit(1)
 		}
-		os.Setenv("GOODREADS_SESSION_PATH", p)
+		if err := os.Setenv("GOODREADS_SESSION_PATH", p); err != nil {
+			fmt.Fprintln(os.Stderr, "set session path:", err)
+			os.Exit(1)
+		}
 	}
 
 	b, err := internal.NewBrowser(false) // headed
@@ -60,7 +63,7 @@ func main() {
 // loadDotEnv sets KEY=VALUE pairs from path as env vars, without overriding
 // variables that are already set. A missing file is not an error.
 func loadDotEnv(path string) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path)) // #nosec G304 -- dev tool; the path is the operator's own -env flag (default .env)
 	if err != nil {
 		return
 	}
@@ -72,7 +75,9 @@ func loadDotEnv(path string) {
 			continue
 		}
 		if k, v, ok := strings.Cut(line, "="); ok && os.Getenv(k) == "" {
-			os.Setenv(strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`))
+			if err := os.Setenv(strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)); err != nil {
+				fmt.Fprintf(os.Stderr, "%s: skipping %q: %v\n", path, k, err)
+			}
 		}
 	}
 }
